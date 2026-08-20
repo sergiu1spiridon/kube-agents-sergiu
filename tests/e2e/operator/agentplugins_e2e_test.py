@@ -21,11 +21,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Enforce UTF-8 stdout/stderr stream handling with replacement for non-decodable characters
-if hasattr(sys.stdout, "buffer"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-if hasattr(sys.stderr, "buffer"):
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+# Enforce UTF-8 stdout/stderr stream handling when invoked directly as a script
+if __name__ == "__main__":
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # Environment & Resource Constants
 def _get_required_env(var_name: str) -> str:
