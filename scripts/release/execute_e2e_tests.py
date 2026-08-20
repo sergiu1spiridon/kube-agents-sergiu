@@ -80,7 +80,7 @@ def load_yaml_config(config_path: pathlib.Path) -> Dict[str, Any]:
 
 
 def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> None:
-    """Configures kubectl context for the target GKE cluster and embeds bearer token."""
+    """Configures kubectl context for target GKE cluster and replaces exec auth with bearer token."""
     cmd = [
         "gcloud",
         "container",
@@ -98,13 +98,26 @@ def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> 
         )
         return
 
-    # Embed access token into kubeconfig user to bypass gke-gcloud-auth-plugin Python crashes
+    # Embed access token into kubeconfig user and remove exec block to completely bypass gke-gcloud-auth-plugin
     token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
     token = token_res.stdout.strip()
     if token_res.returncode == 0 and token:
-        context_name = f"gke_{project_id}_{region}_{cluster_name}"
-        subprocess.run(["kubectl", "config", "set-credentials", context_name, f"--token={token}"], capture_output=True)
-        print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}' (with active bearer token).")
+        kubeconfig_path = pathlib.Path.home() / ".kube" / "config"
+        if kubeconfig_path.exists():
+            try:
+                content = kubeconfig_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(content)
+                target_user = f"gke_{project_id}_{region}_{cluster_name}"
+                for user_entry in data.get("users", []):
+                    if user_entry.get("name") == target_user or not target_user:
+                        user_entry.get("user", {}).pop("exec", None)
+                        user_entry.setdefault("user", {})["token"] = token
+                kubeconfig_path.write_text(yaml.safe_dump(data), encoding="utf-8")
+                print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}' (bearer token injected, exec auth removed).")
+                return
+            except Exception as e:
+                print(f"Warning: Could not patch kubeconfig YAML: {e}", file=sys.stderr)
+        print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}'.")
     else:
         print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}'.")
 

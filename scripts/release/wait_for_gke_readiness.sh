@@ -36,8 +36,17 @@ gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION
 
 TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
 if [ -n "${TOKEN}" ]; then
-  CONTEXT_NAME="gke_${PROJECT_ID}_${REGION}_${CLUSTER_NAME}"
-  kubectl config set-credentials "${CONTEXT_NAME}" --token="${TOKEN}" >/dev/null 2>&1 || true
+  python3 -c "
+import pathlib, yaml
+p = pathlib.Path.home() / '.kube' / 'config'
+if p.exists():
+    d = yaml.safe_load(p.read_text())
+    token = '''${TOKEN}'''
+    for u in d.get('users', []):
+        u.get('user', {}).pop('exec', None)
+        u.setdefault('user', {})['token'] = token
+    p.write_text(yaml.safe_dump(d))
+" || true
 fi
 
 echo "🔑 Configuring Docker authentication for Artifact Registry (${REGION}-docker.pkg.dev)..."
