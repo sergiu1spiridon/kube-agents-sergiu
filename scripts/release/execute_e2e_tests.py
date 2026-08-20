@@ -9,11 +9,16 @@ and executes the specified pytest suites.
 """
 
 import argparse
+import json
 import os
 import pathlib
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional
+
+# Enforce system python for gcloud to prevent google-auth AttributeError crashes in CI
+if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
+    os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"

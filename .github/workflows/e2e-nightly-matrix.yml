@@ -31,6 +31,8 @@ jobs:
     if: github.repository == 'gke-labs/kube-agents' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      CLOUDSDK_PYTHON: "/usr/bin/python3"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -41,6 +41,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# Enforce system python for gcloud to prevent google-auth AttributeError crashes in CI
+if "CLOUDSDK_PYTHON" not in os.environ and Path("/usr/bin/python3").exists():
+    os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
+
 # Enforce UTF-8 stdout/stderr stream handling when invoked directly as a script
 if __name__ == "__main__":
     if hasattr(sys.stdout, "buffer"):
