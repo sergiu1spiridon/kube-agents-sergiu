@@ -132,16 +132,16 @@ def run_environment_tests(
     if project_id and cluster_name and region:
         connect_gke_credentials(project_id, cluster_name, region)
 
-    # Merge custom environment variables
+    # Merge custom environment variables: YAML defaults must not override explicit workflow environment
     custom_env_vars = env.get("env_vars", {})
     env_vars = {
+        **custom_env_vars,
         **os.environ,
         "PATH": f"{pathlib.Path.home()}/.local/bin:{os.environ.get('PATH', '')}",
         "GCP_PROJECT_ID": project_id,
         "GKE_CLUSTER_NAME": cluster_name,
         "GCP_REGION": region,
         "AGENT_NAMESPACE": namespace,
-        **custom_env_vars,
     }
 
     pytest_bin = find_pytest_executable()

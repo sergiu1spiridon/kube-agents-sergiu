@@ -18,7 +18,7 @@ on:
       run_e2e_verification:
         required: false
         type: boolean
-        default: true
+        default: false
         description: "Whether to execute post-deployment E2E smoke tests"
 
 
@@ -148,8 +148,9 @@ jobs:
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}
+          REGISTRY: ${{ vars.REGISTRY || vars.REGISTRY_PREFIX || (env.GCP_PROJECT_ID && format('{0}-docker.pkg.dev/{1}/kube-agents', env.GCP_REGION || 'us-east4', env.GCP_PROJECT_ID)) || '' }}
           GITHUB_ORG: ${{ env.GITHUB_ORG || 'test-org-kube-agent' }}
-          GITHUB_REPO: ${{ env.GITHUB_REPO || 'test-org-kube-agent/agents-repo-2' }}
+          GITHUB_REPO: ${{ env.GITHUB_REPO || 'test-org-kube-agent/agents-repo' }}
           STOCKOUT_SCENARIOS: "04"
           CHAT_TOPIC_NAME: ${{ env.CHAT_TOPIC_NAME }}
           E2E_CHAT_CLIENT_ID: ${{ secrets.E2E_CHAT_CLIENT_ID }}

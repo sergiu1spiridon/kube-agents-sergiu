@@ -96,9 +96,11 @@ def test_github_token_minting_and_connectivity(
 ) -> None:
     """Verifies live in-cluster GitHub authentication, token minting, and repository reachability.
 
-    Executes `audit_report.py start` inside the platform-agent pod. This is 100% read-only against GitHub:
-    it tests WIF / GitHub App token minting, clones/refreshes the GitOps tree, and fetches existing
-    ledger issue state without creating or modifying issues or PRs.
+    Executes a genuinely 100% read-only probe inside the platform-agent pod:
+    1. Triggers token refresh via the Envoy credential proxy sidecar and GitHub Token Minter (Cloud KMS).
+    2. Executes `gh api repos/<target_repo>` from the shared workspace root.
+    3. Verifies repository access and permissions over the network.
+    Does NOT invoke `audit_report.py start`, preventing workspace reset, lease scrubbing, or label writes.
     """
     if not gke_cluster_name or not github_repo:
         pytest.skip("GKE cluster or GITHUB_REPO not configured; skipping live GitHub connectivity probe.")
@@ -125,7 +127,34 @@ def test_github_token_minting_and_connectivity(
 
     pod_name = proc_pod.stdout.strip()
 
-    # Run audit_report.py start inside the agent container to test token minting and GitHub repo access
+    # Refresh credentials via broker and query repository via read-only GET API
+    script = f"""
+import sys, subprocess, os
+
+# 1. Refresh credentials in the credential proxy via the broker client
+p_refresh = subprocess.run(['find', '/opt', '-name', 'github_token_refresh.py'], capture_output=True, text=True)
+if p_refresh.returncode == 0 and p_refresh.stdout.strip():
+    refresh_script = p_refresh.stdout.strip().splitlines()[0]
+    res_ref = subprocess.run(['python3', refresh_script, '{github_repo}'], capture_output=True, text=True)
+    if res_ref.returncode != 0:
+        print(f"Token refresh failed: {{res_ref.stderr}}", file=sys.stderr)
+        sys.exit(res_ref.returncode)
+
+# 2. Execute read-only GitHub API verification via Envoy proxy from workspace root
+cmd_gh = ['gh', 'api', 'repos/{github_repo}', '--jq', '.full_name']
+res_gh = subprocess.run(cmd_gh, cwd='/opt/data', capture_output=True, text=True)
+if res_gh.returncode != 0:
+    print(f"GitHub API query failed: {{res_gh.stderr}}", file=sys.stderr)
+    sys.exit(res_gh.returncode)
+
+full_name = res_gh.stdout.strip()
+if full_name.lower() != '{github_repo}'.lower():
+    print(f"Expected repository '{github_repo}', got '{{full_name}}'", file=sys.stderr)
+    sys.exit(1)
+
+print(f"Successfully authenticated and queried repository: {{full_name}}")
+"""
+
     cmd = [
         "kubectl",
         "exec",
@@ -137,19 +166,19 @@ def test_github_token_minting_and_connectivity(
         "--",
         "python3",
         "-c",
-        "import sys, subprocess, os; "
-        "p = subprocess.run(['find', '/opt', '-name', 'audit_report.py'], capture_output=True, text=True); "
-        "script = p.stdout.strip().splitlines()[0] if p.stdout.strip() else ''; "
-        "sys.exit(subprocess.run(['python3', script, 'start', '--audit=stockout-prevention']).returncode if script else 1)",
+        script,
     ]
     try:
         proc_start = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
         assert proc_start.returncode == 0, (
-            f"GitHub token minting and start probe failed inside pod '{pod_name}' (exit code {proc_start.returncode}):\n"
+            f"GitHub token minting and API probe failed inside pod '{pod_name}' (exit code {proc_start.returncode}):\n"
             f"STDOUT:\n{proc_start.stdout}\nSTDERR:\n{proc_start.stderr}"
         )
+        assert f"Successfully authenticated and queried repository: {github_repo}" in proc_start.stdout, (
+            f"Expected successful repository query confirmation in stdout, got:\n{proc_start.stdout}"
+        )
     except subprocess.TimeoutExpired:
-        pytest.fail(f"GitHub token minting / audit_report start timed out after 90s in pod '{pod_name}'")
+        pytest.fail(f"GitHub token minting / API probe timed out after 90s in pod '{pod_name}'")
 
 
 def test_live_in_pod_stockout_audit_dryrun_lifecycle(
@@ -191,12 +220,18 @@ def test_live_in_pod_stockout_audit_dryrun_lifecycle(
     pod_name = proc_pod.stdout.strip()
 
     script_cmd = """
-import sys, subprocess, json, tempfile, os
+import sys, subprocess, json, tempfile, os, shutil
 
 p = subprocess.run(['find', '/opt', '-name', 'audit_report.py'], capture_output=True, text=True)
 if p.returncode != 0 or not p.stdout.strip():
     sys.exit(1)
 script_path = p.stdout.strip().splitlines()[0]
+
+# Use an ephemeral lease workspace under /opt/data to avoid colliding with or resetting the cron lease
+tmp_dir = tempfile.mkdtemp(dir="/opt/data")
+env = os.environ.copy()
+env["GITOPS_WORKSPACE"] = tmp_dir
+env["SCRATCH_DIR"] = tmp_dir
 
 doc = {
   "audit": "stockout-prevention",
@@ -243,19 +278,23 @@ doc = {
   }]
 }
 
-with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+findings_path = os.path.join(tmp_dir, "findings.json")
+with open(findings_path, "w") as f:
     json.dump(doc, f)
-    findings_path = f.name
 
 try:
-    res = subprocess.run(["python3", script_path, "finish", "--audit=stockout-prevention", f"--findings-file={findings_path}", "--dry-run"], capture_output=True, text=True)
+    res = subprocess.run(
+        ["python3", script_path, "finish", "--audit=stockout-prevention", f"--findings-file={findings_path}", "--dry-run"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
     print(res.stdout)
     if res.stderr:
         print(res.stderr, file=sys.stderr)
     sys.exit(res.returncode)
 finally:
-    if os.path.exists(findings_path):
-        os.unlink(findings_path)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
 """ % (gke_cluster_name, gke_cluster_name)
 
     cmd = [

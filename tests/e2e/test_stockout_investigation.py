@@ -192,6 +192,14 @@ def test_stockout_scenario(
         env=env,
     )
     assert proc.returncode == 0, (
-        f"Stockout Scenario '{scenario_slug}' ({rule} - {description}) failed:\n"
+        f"Stockout Scenario '{scenario_slug}' ({rule} - {description}) failed with exit code {proc.returncode}:\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert "no new session or board task after" not in proc.stdout, (
+        f"Stockout Scenario '{scenario_slug}' ({rule}) timed out: Platform Agent never started investigation:\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert ("investigation started:" in proc.stdout or "the workload scheduled after all" in proc.stdout), (
+        f"Stockout Scenario '{scenario_slug}' ({rule}) did not record an active investigation:\n"
         f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
     )

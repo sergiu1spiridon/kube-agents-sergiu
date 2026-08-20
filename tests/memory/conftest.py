@@ -1,11 +1,13 @@
 """Test fixtures and mock stubs for Hermes in-memory provider tests."""
 
+import importlib.util
 import json
 import sys
 import types
 
-# Ensure stub modules exist when running on standard Python without Hermes base image.
-if "agent" not in sys.modules:
+# Ensure stub modules exist ONLY when Hermes is not available on sys.path.
+# Guarding with find_spec ensures we never shadow real Hermes modules when available.
+if importlib.util.find_spec("agent") is None and "agent" not in sys.modules:
     agent_mod = types.ModuleType("agent")
     memory_provider_mod = types.ModuleType("agent.memory_provider")
 
@@ -18,7 +20,7 @@ if "agent" not in sys.modules:
     sys.modules["agent"] = agent_mod
     sys.modules["agent.memory_provider"] = memory_provider_mod
 
-if "plugins" not in sys.modules:
+if importlib.util.find_spec("plugins") is None and "plugins" not in sys.modules:
     plugins_mod = types.ModuleType("plugins")
     plugins_memory_mod = types.ModuleType("plugins.memory")
     plugins_memory_mod.load_memory_provider = lambda name: None
@@ -26,7 +28,7 @@ if "plugins" not in sys.modules:
     sys.modules["plugins"] = plugins_mod
     sys.modules["plugins.memory"] = plugins_memory_mod
 
-if "tools" not in sys.modules:
+if importlib.util.find_spec("tools") is None and "tools" not in sys.modules:
     tools_mod = types.ModuleType("tools")
     tools_reg_mod = types.ModuleType("tools.registry")
     tools_reg_mod.tool_error = lambda msg, **kw: json.dumps({"error": msg, **kw})

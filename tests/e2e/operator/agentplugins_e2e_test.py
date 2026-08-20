@@ -43,7 +43,14 @@ def _get_required_env(var_name: str) -> str:
     elif var_name == "NAMESPACE":
         return os.environ.get("AGENT_NAMESPACE", "kubeagents-system")
     elif var_name == "REGISTRY":
-        return os.environ.get("CONTAINER_REGISTRY", "")
+        reg = os.environ.get("REGISTRY") or os.environ.get("CONTAINER_REGISTRY") or os.environ.get("REGISTRY_PREFIX")
+        if reg:
+            return reg
+        project_id = os.environ.get("GCP_PROJECT_ID") or os.environ.get("PROJECT_ID")
+        region = os.environ.get("GCP_REGION") or os.environ.get("REGION") or "us-east4"
+        if project_id:
+            return f"{region}-docker.pkg.dev/{project_id}/kube-agents"
+        return ""
     return ""
 
 KUBE_CONTEXT: str = _get_required_env("KUBE_CONTEXT")
