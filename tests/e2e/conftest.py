@@ -1,0 +1,273 @@
+"""Shared fixtures and helpers for live GKE E2E promotion tests."""
+
+import base64
+import json
+import os
+import pathlib
+import subprocess
+import time
+from collections.abc import Generator
+from typing import Any, Dict, Optional
+
+import pytest
+
+try:
+    from dotenv import load_dotenv
+    _repo_root_env = pathlib.Path(__file__).resolve().parents[2] / ".env"
+    if _repo_root_env.is_file():
+        load_dotenv(_repo_root_env)
+except ImportError:
+    pass
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
+
+
+def _parse_yaml_fallback(content: str) -> Dict[str, Any]:
+    """Fallback parser for simple environments list and env_vars in e2e_config.yaml."""
+    result: Dict[str, Any] = {"defaults": {}, "environments": []}
+    current_env: Optional[Dict[str, Any]] = None
+    in_env_vars = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- name:"):
+            in_env_vars = False
+            if current_env:
+                result["environments"].append(current_env)
+            name = stripped.split(":", 1)[1].strip().strip('"\'')
+            current_env = {"name": name, "tests": [], "env_vars": {}}
+        elif current_env and stripped.startswith("- ") and "tests/" in stripped:
+            in_env_vars = False
+            current_env["tests"].append(stripped.lstrip("- ").strip().strip('"\''))
+        elif current_env and stripped.startswith("env_vars:"):
+            in_env_vars = True
+        elif current_env and in_env_vars and ":" in stripped:
+            indent = len(line) - len(line.lstrip())
+            if indent >= 4 or line.startswith("    ") or line.startswith("\t"):
+                parts = stripped.split(":", 1)
+                current_env["env_vars"][parts[0].strip().lstrip("- ")] = parts[1].strip().strip('"\'')
+            else:
+                in_env_vars = False
+                parts = stripped.split(":", 1)
+                current_env[parts[0].strip().lstrip("- ")] = parts[1].strip().strip('"\'')
+        elif current_env and ":" in stripped:
+            in_env_vars = False
+            parts = stripped.split(":", 1)
+            key = parts[0].strip().lstrip("- ")
+            val = parts[1].strip().strip('"\'')
+            if key in ("project_id", "cluster_name", "region", "namespace", "description"):
+                current_env[key] = val
+    if current_env:
+        result["environments"].append(current_env)
+    return result
+
+
+def _get_default_config_env() -> Dict[str, Any]:
+    """Retrieves and merges defaults and environment settings defined in e2e_config.yaml."""
+    if not _DEFAULT_CONFIG_PATH.is_file():
+        return {}
+    content = _DEFAULT_CONFIG_PATH.read_text(encoding="utf-8")
+    try:
+        cfg = yaml.safe_load(content) if yaml else _parse_yaml_fallback(content)
+    except Exception:
+        cfg = _parse_yaml_fallback(content)
+
+    defaults = (cfg or {}).get("defaults", {})
+    envs = (cfg or {}).get("environments", [])
+    merged: Dict[str, Any] = {"env_vars": {}, **defaults}
+    for env in envs:
+        for k, v in env.items():
+            if k == "env_vars" and isinstance(v, dict):
+                merged["env_vars"].update(v)
+            elif k not in merged or not merged[k]:
+                merged[k] = v
+    return merged
+
+
+@pytest.fixture(scope="session")
+def gcp_project_id() -> Optional[str]:
+    """Resolves GCP Project ID from environment or e2e_config.yaml."""
+    val = os.environ.get("GCP_PROJECT_ID") or os.environ.get("PROJECT_ID")
+    if val:
+        return val
+
+    cfg = _get_default_config_env()
+    return cfg.get("project_id")
+
+
+@pytest.fixture(scope="session")
+def gke_cluster_name() -> Optional[str]:
+    """Resolves GKE Cluster Name from environment or e2e_config.yaml."""
+    val = os.environ.get("GKE_CLUSTER_NAME") or os.environ.get("CLUSTER_NAME")
+    if val:
+        return val
+
+    cfg = _get_default_config_env()
+    return cfg.get("cluster_name")
+
+
+@pytest.fixture(scope="session")
+def gcp_region() -> str:
+    """Resolves GCP Region from environment or e2e_config.yaml."""
+    val = os.environ.get("GCP_REGION") or os.environ.get("REGION")
+    if val:
+        return val
+
+    cfg = _get_default_config_env()
+    return cfg.get("region") or "us-east4"
+
+
+@pytest.fixture(scope="session")
+def agent_namespace() -> str:
+    """Resolves Kubernetes namespace where platform-agent is deployed."""
+    val = os.environ.get("AGENT_NAMESPACE")
+    if val:
+        return val
+    cfg = _get_default_config_env()
+    return cfg.get("namespace") or "kubeagents-system"
+
+
+@pytest.fixture(scope="session")
+def github_repo(agent_namespace: str) -> Optional[str]:
+    """Resolves the registered GitOps/Audit repository (owner/repo)."""
+    val = os.environ.get("GITHUB_REPO") or os.environ.get("GITOPS_REPO")
+    if val:
+        return val
+
+    # Try reading from platform-agent-settings in the cluster
+    try:
+        cmd = [
+            "kubectl", "get", "cm", "platform-agent-settings",
+            "-n", agent_namespace,
+            "-o", "jsonpath={.data.SETTINGS\\.md}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if "Git Repo:" in line:
+                    repo_cand = line.split("Git Repo:", 1)[1].strip().strip("*` ")
+                    if repo_cand and repo_cand.lower() != "none":
+                        return repo_cand
+    except Exception:
+        pass
+
+    cfg = _get_default_config_env()
+    env_vars = cfg.get("env_vars", {})
+    return env_vars.get("GITHUB_REPO") or env_vars.get("GITOPS_REPO")
+
+
+@pytest.fixture(scope="session")
+def github_org(github_repo: Optional[str]) -> Optional[str]:
+    """Resolves the GitHub Organization name."""
+    val = os.environ.get("GITHUB_ORG")
+    if val:
+        return val
+    if github_repo and "/" in github_repo:
+        return github_repo.split("/", 1)[0]
+    cfg = _get_default_config_env()
+    env_vars = cfg.get("env_vars", {})
+    return env_vars.get("GITHUB_ORG")
+
+
+@pytest.fixture(scope="session")
+def github_app_id() -> Optional[str]:
+    """Resolves the GitHub App ID."""
+    val = os.environ.get("GITHUB_APP_ID")
+    if val:
+        return val
+    cfg = _get_default_config_env()
+    env_vars = cfg.get("env_vars", {})
+    return env_vars.get("GITHUB_APP_ID")
+
+
+@pytest.fixture(scope="session")
+def github_installation_id() -> Optional[str]:
+    """Resolves the GitHub App Installation ID."""
+    val = os.environ.get("GITHUB_INSTALLATION_ID")
+    if val:
+        return val
+    cfg = _get_default_config_env()
+    env_vars = cfg.get("env_vars", {})
+    return env_vars.get("GITHUB_INSTALLATION_ID")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_cluster_credentials(
+    gcp_project_id: Optional[str],
+    gke_cluster_name: Optional[str],
+    gcp_region: str,
+) -> None:
+    """Configures kubectl context for the target GKE cluster if not already active."""
+    if gcp_project_id and gke_cluster_name and gcp_region:
+        subprocess.run(
+            [
+                "gcloud", "container", "clusters", "get-credentials",
+                gke_cluster_name,
+                f"--region={gcp_region}",
+                f"--project={gcp_project_id}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+
+
+@pytest.fixture(scope="session")
+def platform_agent_api_key(agent_namespace: str) -> Optional[str]:
+    """Retrieves API_SERVER_KEY from platform-agent-secrets in the cluster."""
+    try:
+        cmd = [
+            "kubectl", "get", "secret", "platform-agent-secrets",
+            "-n", agent_namespace,
+            "-o", "jsonpath={.data.API_SERVER_KEY}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        raw_key = result.stdout.strip()
+        if raw_key:
+            return base64.b64decode(raw_key).decode("utf-8")
+    except Exception:
+        pass
+    return os.environ.get("PLATFORM_AGENT_TOKEN") or os.environ.get("API_SERVER_KEY")
+
+
+@pytest.fixture(scope="session")
+def port_forward_agent(
+    agent_namespace: str, platform_agent_api_key: Optional[str]
+) -> Generator[Optional[str], None, None]:
+    """Establishes background port-forward to svc/platform-agent:8642 with guaranteed cleanup."""
+    if not platform_agent_api_key:
+        yield None
+        return
+
+    port = os.environ.get("AGENT_LOCAL_PORT", "8642")
+    url = f"http://127.0.0.1:{port}"
+
+    proc = subprocess.Popen(
+        [
+            "kubectl",
+            "port-forward",
+            "svc/platform-agent",
+            "-n",
+            agent_namespace,
+            f"{port}:8642",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(3)  # Allow socket to bind
+
+    try:
+        yield url
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()

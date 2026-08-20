@@ -34,3 +34,4 @@ mcp<2
 
 python-dotenv
 pyyaml
+uv

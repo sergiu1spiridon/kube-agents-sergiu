@@ -15,6 +15,12 @@ on:
         required: true
         type: string
         description: "Immutable commit SHA to check out. Must be a SHA, not a branch or tag ref: a mutable ref lets the deployed code differ from the code that passed validation."
+      run_e2e_verification:
+        required: false
+        type: boolean
+        default: true
+        description: "Whether to execute post-deployment E2E smoke tests"
+
 
 jobs:
   validate:
@@ -62,8 +68,8 @@ jobs:
       SLACK_HOME_CHANNEL: ${{ vars.SLACK_HOME_CHANNEL }}
       SLACK_HOME_CHANNEL_NAME: ${{ vars.SLACK_HOME_CHANNEL_NAME }}
       NAMESPACE: "kubeagents-system"
-      GITHUB_ORG: ${{ vars.GH_ORG }}
-      GITHUB_REPO: ${{ vars.GH_REPO }}
+      GITHUB_ORG: ${{ vars.GH_ORG || vars.GITHUB_ORG }}
+      GITHUB_REPO: ${{ vars.GH_REPO || vars.GITHUB_REPO }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -124,3 +130,31 @@ jobs:
             kubectl logs -n ${{ env.NAMESPACE }} -l app=platform-agent-gateway --all-containers --tail=50 || true
             exit 1
           fi
+
+      - name: Set up Python Environment
+        if: ${{ inputs.run_e2e_verification }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python Dependencies
+        if: ${{ inputs.run_e2e_verification }}
+        run: ./scripts/release/install_e2e_deps.sh
+
+      - name: Execute Post-Deploy E2E Verification
+        if: ${{ inputs.run_e2e_verification }}
+        env:
+          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}
+          GITHUB_ORG: ${{ env.GITHUB_ORG || 'test-org-kube-agent' }}
+          GITHUB_REPO: ${{ env.GITHUB_REPO || 'test-org-kube-agent/agents-repo-2' }}
+          STOCKOUT_SCENARIOS: "04"
+          CHAT_TOPIC_NAME: ${{ env.CHAT_TOPIC_NAME }}
+          E2E_CHAT_CLIENT_ID: ${{ secrets.E2E_CHAT_CLIENT_ID }}
+          E2E_CHAT_CLIENT_SECRET: ${{ secrets.E2E_CHAT_CLIENT_SECRET }}
+          E2E_CHAT_REFRESH_TOKEN: ${{ secrets.E2E_CHAT_REFRESH_TOKEN }}
+          CHAT_SPACE_ID: ${{ secrets.E2E_CHAT_SPACE_ID }}
+        run: make test-e2e
+

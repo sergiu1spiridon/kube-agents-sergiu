@@ -29,6 +29,7 @@ jobs:
         with:
           python-version: "3.12"
 
+
       # Read from requirements-test.txt rather than spelled out here, so this
       # job and `make test-python-deps` cannot drift into disagreeing about
       # what the suite needs. The reasoning for each entry is in that file.
@@ -43,3 +44,6 @@ jobs:
       # never started a job at all.
       - name: Run Python unit tests
         run: make test-python
+
+      - name: Run Bench unit tests
+        run: cd bench && uv run pytest tests
