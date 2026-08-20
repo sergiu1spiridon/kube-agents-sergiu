@@ -1,11 +1,11 @@
-name: Manual E2E Test Runner
+name: Manual E2E Runner
 
 on:
   workflow_dispatch:
     inputs:
       test_environment:
-        description: "Target test environment from e2e_config.yaml"
-        required: true
+        description: "Target test environment (cluster-e2e, audit-e2e, gchat-e2e, all)"
+        required: false
         default: "cluster-e2e"
         type: choice
         options:
@@ -19,10 +19,10 @@ on:
         default: "04"
         type: string
       rebuild_operator:
-        description: "Rebuild operator from source (opt-in)"
+        description: "Rebuild operator from source (true / false)"
         required: false
-        default: false
-        type: boolean
+        default: "false"
+        type: string
 
 permissions:
   contents: read
