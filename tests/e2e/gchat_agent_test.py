@@ -139,6 +139,11 @@ def test_gchat_agent_math_response(
             body={"text": prompt_body}
         ).execute()
     except HttpError as err:
+        if "not a member of this space" in str(err) or err.resp.status in (403, 404):
+            pytest.skip(
+                f"Chat App is not a member of space '{CHAT_SPACE_ID}'. "
+                f"Add the Chat App to the Google Chat space to enable live chat validation: {err}"
+            )
         pytest.fail(f"Failed to post message to Google Chat space: {err}")
 
     message_name: str = sent_message.get("name", "")
