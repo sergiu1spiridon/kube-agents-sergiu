@@ -215,7 +215,19 @@ def ensure_docker_registry_auth(image: str) -> None:
     if "-docker.pkg.dev" in image:
         host = image.split("/")[0]
         try:
-            subprocess.run(["gcloud", "auth", "configure-docker", host, "--quiet"], capture_output=True)
+            env = dict(os.environ)
+            if Path("/usr/bin/python3").exists():
+                env["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
+            token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, env=env)
+            token = token_res.stdout.strip()
+            if token:
+                subprocess.run(
+                    ["docker", "login", "-u", "oauth2accesstoken", "--password-stdin", f"https://{host}"],
+                    input=token,
+                    text=True,
+                    capture_output=True,
+                )
+            subprocess.run(["gcloud", "auth", "configure-docker", host, "--quiet"], capture_output=True, env=env)
         except Exception:
             pass
 

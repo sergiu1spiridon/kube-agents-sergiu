@@ -39,6 +39,9 @@
 
 set -euo pipefail
 
+# Enforce system python for gcloud to prevent google-auth AttributeError crashes in CI
+export CLOUDSDK_PYTHON="${CLOUDSDK_PYTHON:-/usr/bin/python3}"
+
 # --------------------------------------------------------------------- settings
 #
 # Every one of these is overridable from the environment. The defaults describe the
