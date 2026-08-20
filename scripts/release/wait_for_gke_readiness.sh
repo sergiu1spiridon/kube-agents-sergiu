@@ -22,6 +22,13 @@ echo "Target Commit SHA: ${COMMIT_SHA:-(not specified)}"
 echo "Readiness Timeout: ${READINESS_TIMEOUT} (5 minutes)"
 echo "======================================================================"
 
+export CLOUDSDK_PYTHON="${CLOUDSDK_PYTHON:-/usr/bin/python3}"
+export USE_GKE_GCLOUD_AUTH_PLUGIN="True"
+
+if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+  gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" || true
+fi
+
 gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"
 # Unquoted on purpose: empty must contribute no argument. See gke_dns_endpoint.sh.
 gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION}" --project "${PROJECT_ID}" \

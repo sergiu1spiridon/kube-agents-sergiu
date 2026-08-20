@@ -137,6 +137,8 @@ def run_environment_tests(
     env_vars = {
         **custom_env_vars,
         **os.environ,
+        "CLOUDSDK_PYTHON": os.environ.get("CLOUDSDK_PYTHON", "/usr/bin/python3"),
+        "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
         "PATH": f"{pathlib.Path.home()}/.local/bin:{os.environ.get('PATH', '')}",
         "GCP_PROJECT_ID": project_id,
         "GKE_CLUSTER_NAME": cluster_name,

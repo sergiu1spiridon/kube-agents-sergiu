@@ -184,7 +184,12 @@ def run_cmd(
     if not capture_output:
         print(f"\n$ {cmd_str}", flush=True)
 
-    run_env = {**os.environ, **env} if env else None
+    run_env = {
+        **os.environ,
+        "CLOUDSDK_PYTHON": os.environ.get("CLOUDSDK_PYTHON", "/usr/bin/python3"),
+        "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
+        **(env or {}),
+    }
     res = subprocess.run(
         cmd, cwd=cwd, check=False, text=True, encoding="utf-8", errors="replace", capture_output=True, env=run_env
     )

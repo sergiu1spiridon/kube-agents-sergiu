@@ -34,6 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    env:
+      CLOUDSDK_PYTHON: "/usr/bin/python3"
+      USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,6 +70,10 @@ jobs:
           GCP_REGION: ${{ vars.GCP_REGION }}
           GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
         run: |
+          if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+            echo "Activating service account credentials..."
+            gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" || true
+          fi
           echo "Connecting to GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_REGION} (${GCP_PROJECT_ID})..."
           gcloud container clusters get-credentials "${GKE_CLUSTER_NAME}" --location "${GCP_REGION}" --project "${GCP_PROJECT_ID}"
           echo "Configuring Docker authentication for Artifact Registry (${GCP_REGION}-docker.pkg.dev)..."
