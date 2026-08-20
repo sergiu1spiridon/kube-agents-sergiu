@@ -103,7 +103,7 @@ def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> 
         )
         return
 
-    # Embed access token into kubeconfig user and remove exec block to completely bypass gke-gcloud-auth-plugin
+    # Embed access token into kubeconfig users and remove exec block to completely bypass gke-gcloud-auth-plugin
     token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
     token = token_res.stdout.strip()
     if token_res.returncode == 0 and token:
@@ -111,12 +111,12 @@ def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> 
             view_res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
             if view_res.returncode == 0 and view_res.stdout.strip():
                 data = json.loads(view_res.stdout)
-                target_user = f"gke_{project_id}_{region}_{cluster_name}"
                 for user_entry in data.get("users", []):
-                    if user_entry.get("name") == target_user or not target_user:
-                        user_entry.get("user", {}).pop("exec", None)
-                        user_entry.setdefault("user", {})["token"] = token
-                kubeconfig_path = pathlib.Path.home() / ".kube" / "config"
+                    user_entry.get("user", {}).pop("exec", None)
+                    user_entry.setdefault("user", {})["token"] = token
+                kubeconfig_env = os.environ.get("KUBECONFIG")
+                kubeconfig_path = pathlib.Path(kubeconfig_env) if kubeconfig_env else (pathlib.Path.home() / ".kube" / "config")
+                kubeconfig_path.parent.mkdir(parents=True, exist_ok=True)
                 kubeconfig_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
                 print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}' (bearer token injected, exec auth removed).")
                 return

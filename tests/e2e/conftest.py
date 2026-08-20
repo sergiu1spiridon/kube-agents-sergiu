@@ -28,6 +28,29 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Configures session environment and ensures kubeconfig has direct bearer token without exec plugin."""
+    if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
+        os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
+
+    token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
+    token = token_res.stdout.strip()
+    if token_res.returncode == 0 and token:
+        try:
+            view_res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
+            if view_res.returncode == 0 and view_res.stdout.strip():
+                data = json.loads(view_res.stdout)
+                for user_entry in data.get("users", []):
+                    user_entry.get("user", {}).pop("exec", None)
+                    user_entry.setdefault("user", {})["token"] = token
+                kubeconfig_env = os.environ.get("KUBECONFIG")
+                p = pathlib.Path(kubeconfig_env) if kubeconfig_env else (pathlib.Path.home() / ".kube" / "config")
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+
 def _parse_yaml_fallback(content: str) -> Dict[str, Any]:
     """Fallback parser for simple environments list and env_vars in e2e_config.yaml."""
     result: Dict[str, Any] = {"defaults": {}, "environments": []}
