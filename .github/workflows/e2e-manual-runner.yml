@@ -70,29 +70,9 @@ jobs:
           GCP_REGION: ${{ vars.GCP_REGION }}
           GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
         run: |
-          if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
-            echo "Activating service account credentials..."
-            gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" || true
-          fi
-          echo "Connecting to GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_REGION} (${GCP_PROJECT_ID})..."
-          gcloud container clusters get-credentials "${GKE_CLUSTER_NAME}" --location "${GCP_REGION}" --project "${GCP_PROJECT_ID}"
-          TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
-          if [ -n "${TOKEN}" ]; then
-            python3 -c "
-import json, pathlib, subprocess
-res = subprocess.run(['kubectl', 'config', 'view', '--raw', '-o', 'json'], capture_output=True, text=True)
-if res.returncode == 0 and res.stdout.strip():
-    data = json.loads(res.stdout)
-    token = '''${TOKEN}'''
-    for u in data.get('users', []):
-        u.get('user', {}).pop('exec', None)
-        u.setdefault('user', {})['token'] = token
-    p = pathlib.Path.home() / '.kube' / 'config'
-    p.write_text(json.dumps(data, indent=2), encoding='utf-8')
-" || true
-          fi
-          echo "Configuring Docker authentication for Artifact Registry (${GCP_REGION}-docker.pkg.dev)..."
-          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet || true
+          ./scripts/release/wait_for_gke_readiness.sh
+          REGION="${{ vars.GCP_REGION || 'us-east4' }}"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
 
       - name: Execute E2E Tests
         env:
