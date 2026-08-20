@@ -37,15 +37,16 @@ gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION
 TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
 if [ -n "${TOKEN}" ]; then
   python3 -c "
-import pathlib, yaml
-p = pathlib.Path.home() / '.kube' / 'config'
-if p.exists():
-    d = yaml.safe_load(p.read_text())
+import json, pathlib, subprocess
+res = subprocess.run(['kubectl', 'config', 'view', '--raw', '-o', 'json'], capture_output=True, text=True)
+if res.returncode == 0 and res.stdout.strip():
+    data = json.loads(res.stdout)
     token = '''${TOKEN}'''
-    for u in d.get('users', []):
+    for u in data.get('users', []):
         u.get('user', {}).pop('exec', None)
         u.setdefault('user', {})['token'] = token
-    p.write_text(yaml.safe_dump(d))
+    p = pathlib.Path.home() / '.kube' / 'config'
+    p.write_text(json.dumps(data, indent=2), encoding='utf-8')
 " || true
 fi
 
