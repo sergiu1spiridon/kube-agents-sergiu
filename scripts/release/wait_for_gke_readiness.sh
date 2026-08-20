@@ -34,6 +34,12 @@ gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"
 gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION}" --project "${PROJECT_ID}" \
   ${GKE_DNS_ENDPOINT_FLAG}
 
+TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
+if [ -n "${TOKEN}" ]; then
+  CONTEXT_NAME="gke_${PROJECT_ID}_${REGION}_${CLUSTER_NAME}"
+  kubectl config set-credentials "${CONTEXT_NAME}" --token="${TOKEN}" >/dev/null 2>&1 || true
+fi
+
 echo "🔑 Configuring Docker authentication for Artifact Registry (${REGION}-docker.pkg.dev)..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
 

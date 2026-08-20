@@ -80,7 +80,7 @@ def load_yaml_config(config_path: pathlib.Path) -> Dict[str, Any]:
 
 
 def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> None:
-    """Configures kubectl context for the target GKE cluster."""
+    """Configures kubectl context for the target GKE cluster and embeds bearer token."""
     cmd = [
         "gcloud",
         "container",
@@ -96,6 +96,15 @@ def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> 
             f"Warning: Could not connect kubectl to cluster '{cluster_name}': {res.stderr.strip()}",
             file=sys.stderr,
         )
+        return
+
+    # Embed access token into kubeconfig user to bypass gke-gcloud-auth-plugin Python crashes
+    token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
+    token = token_res.stdout.strip()
+    if token_res.returncode == 0 and token:
+        context_name = f"gke_{project_id}_{region}_{cluster_name}"
+        subprocess.run(["kubectl", "config", "set-credentials", context_name, f"--token={token}"], capture_output=True)
+        print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}' (with active bearer token).")
     else:
         print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}'.")
 
