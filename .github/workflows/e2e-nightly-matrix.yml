@@ -66,6 +66,11 @@ jobs:
           GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
         run: ./scripts/release/wait_for_gke_readiness.sh
 
+      - name: Configure Docker Authentication for Artifact Registry
+        run: |
+          REGION="${{ vars.GCP_REGION || 'us-east4' }}"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
+
       - name: Execute Full E2E Matrix (All Scenarios & Fleet Audit Streams)
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}

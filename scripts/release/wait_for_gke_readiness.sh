@@ -24,9 +24,11 @@ echo "======================================================================"
 
 gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"
 # Unquoted on purpose: empty must contribute no argument. See gke_dns_endpoint.sh.
-# shellcheck disable=SC2086
 gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION}" --project "${PROJECT_ID}" \
   ${GKE_DNS_ENDPOINT_FLAG}
+
+echo "🔑 Configuring Docker authentication for Artifact Registry (${REGION}-docker.pkg.dev)..."
+gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
 
 if [ -n "${COMMIT_SHA}" ]; then
   echo "🔍 Verifying platform-agent-gateway deployment container image matches commit ${COMMIT_SHA}..."

@@ -142,6 +142,12 @@ jobs:
         if: ${{ inputs.run_e2e_verification }}
         run: ./scripts/release/install_e2e_deps.sh
 
+      - name: Configure Docker Authentication for Artifact Registry
+        if: ${{ inputs.run_e2e_verification }}
+        run: |
+          REGION="${{ env.GCP_REGION || 'us-east4' }}"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
+
       - name: Execute Post-Deploy E2E Verification
         if: ${{ inputs.run_e2e_verification }}
         env:
