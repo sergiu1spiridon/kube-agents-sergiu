@@ -25,6 +25,11 @@ on:
         required: false
         default: "false"
         type: string
+      fleet_audit_live:
+        description: "Live on-demand fleet audit stream dispatch ('all', 'stockout-prevention', or 'false')"
+        required: false
+        default: "false"
+        type: string
 
 permissions:
   contents: read
@@ -88,6 +93,7 @@ jobs:
           TEST_ENVIRONMENT: ${{ inputs.test_environment }}
           STOCKOUT_SCENARIOS: ${{ inputs.stockout_scenarios }}
           REBUILD_OPERATOR: ${{ inputs.rebuild_operator }}
+          FLEET_AUDIT_LIVE: ${{ inputs.fleet_audit_live || 'false' }}
           CHAT_TOPIC_NAME: ${{ vars.CHAT_TOPIC_NAME }}
           E2E_CHAT_CLIENT_ID: ${{ secrets.E2E_CHAT_CLIENT_ID }}
           E2E_CHAT_CLIENT_SECRET: ${{ secrets.E2E_CHAT_CLIENT_SECRET }}

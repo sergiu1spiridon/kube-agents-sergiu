@@ -579,6 +579,7 @@ def test_fleet_audit_live_stream_dispatch(
     url = f"{port_forward_agent}/v1/responses"
     payload = json.dumps({
         "model": "model-default",
+        "conversation": f"e2e-fleet-audit-{audit_id}",
         "input": prompt,
     }).encode("utf-8")
     headers = {
