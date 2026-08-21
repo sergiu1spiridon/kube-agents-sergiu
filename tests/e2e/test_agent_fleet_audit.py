@@ -149,15 +149,15 @@ env['PWD'] = '/opt/data'
 cmd_gh = ['gh', 'api', f'repos/{github_repo}', '--jq', '.full_name']
 res_gh = subprocess.run(cmd_gh, cwd='/opt/data', env=env, capture_output=True, text=True)
 if res_gh.returncode != 0:
-    print(f"GitHub API query failed: {res_gh.stderr}", file=sys.stderr)
+    print(f"GitHub API query failed: {{res_gh.stderr}}", file=sys.stderr)
     sys.exit(res_gh.returncode)
 
 full_name = res_gh.stdout.strip()
 if full_name.lower() != '{github_repo}'.lower():
-    print(f"Expected repository '{github_repo}', got '{full_name}'", file=sys.stderr)
+    print(f"Expected repository '{github_repo}', got '{{full_name}}'", file=sys.stderr)
     sys.exit(1)
 
-print(f"Successfully authenticated and queried repository: {full_name}")
+print(f"Successfully authenticated and queried repository: {{full_name}}")
 """
 
     cmd = [
