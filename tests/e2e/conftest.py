@@ -29,26 +29,11 @@ _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Configures session environment and ensures kubeconfig has direct bearer token without exec plugin."""
+    """Configures session environment variables."""
     if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
         os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
-
-    token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
-    token = token_res.stdout.strip()
-    if token_res.returncode == 0 and token:
-        try:
-            view_res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
-            if view_res.returncode == 0 and view_res.stdout.strip():
-                data = json.loads(view_res.stdout)
-                for user_entry in data.get("users", []):
-                    user_entry.get("user", {}).pop("exec", None)
-                    user_entry.setdefault("user", {})["token"] = token
-                kubeconfig_env = os.environ.get("KUBECONFIG")
-                p = pathlib.Path(kubeconfig_env) if kubeconfig_env else (pathlib.Path.home() / ".kube" / "config")
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+    if "USE_GKE_GCLOUD_AUTH_PLUGIN" not in os.environ:
+        os.environ["USE_GKE_GCLOUD_AUTH_PLUGIN"] = "True"
 
 
 def _parse_yaml_fallback(content: str) -> Dict[str, Any]:
@@ -93,7 +78,7 @@ def _parse_yaml_fallback(content: str) -> Dict[str, Any]:
 
 
 def _get_default_config_env() -> Dict[str, Any]:
-    """Retrieves and merges defaults and environment settings defined in e2e_config.yaml."""
+    """Retrieves and merges defaults and default environment settings defined in e2e_config.yaml."""
     if not _DEFAULT_CONFIG_PATH.is_file():
         return {}
     content = _DEFAULT_CONFIG_PATH.read_text(encoding="utf-8")
@@ -104,14 +89,13 @@ def _get_default_config_env() -> Dict[str, Any]:
 
     defaults = (cfg or {}).get("defaults", {})
     envs = (cfg or {}).get("environments", [])
-    merged: Dict[str, Any] = {"env_vars": {}, **defaults}
-    for env in envs:
-        for k, v in env.items():
-            if k == "env_vars" and isinstance(v, dict):
-                merged["env_vars"].update(v)
-            elif k not in merged or not merged[k]:
-                merged[k] = v
-    return merged
+    default_env_name = os.environ.get("E2E_ENV") or defaults.get("default_environment", "cluster-e2e")
+    default_env = next((e for e in envs if e.get("name") == default_env_name), {})
+    return {
+        "env_vars": default_env.get("env_vars", {}),
+        **defaults,
+        **{k: v for k, v in default_env.items() if k != "env_vars"},
+    }
 
 
 @pytest.fixture(scope="session")
@@ -234,7 +218,7 @@ def ensure_cluster_credentials(
     gke_cluster_name: Optional[str],
     gcp_region: str,
 ) -> None:
-    """Configures kubectl context for the target GKE cluster and embeds bearer token."""
+    """Configures kubectl context for the target GKE cluster."""
     if gcp_project_id and gke_cluster_name and gcp_region:
         subprocess.run(
             [
@@ -246,22 +230,6 @@ def ensure_cluster_credentials(
             capture_output=True,
             text=True,
         )
-        token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
-        token = token_res.stdout.strip()
-        if token_res.returncode == 0 and token:
-            try:
-                view_res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
-                if view_res.returncode == 0 and view_res.stdout.strip():
-                    data = json.loads(view_res.stdout)
-                    for user_entry in data.get("users", []):
-                        user_entry.get("user", {}).pop("exec", None)
-                        user_entry.setdefault("user", {})["token"] = token
-                    kubeconfig_env = os.environ.get("KUBECONFIG")
-                    p = pathlib.Path(kubeconfig_env) if kubeconfig_env else (pathlib.Path.home() / ".kube" / "config")
-                    p.parent.mkdir(parents=True, exist_ok=True)
-                    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            except Exception:
-                pass
 
 
 

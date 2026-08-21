@@ -11,6 +11,7 @@ defaults:
   region: "us-east4"
   namespace: "kubeagents-system"
   timeout_seconds: 600
+  default_environment: "cluster-e2e"
 
 environments:
   # ----------------------------------------------------------------------------
@@ -51,7 +52,6 @@ environments:
     env_vars:
       GITHUB_ORG: "test-org-kube-agent"
       GITHUB_REPO: "test-org-kube-agent/agents-repo"
-      FLEET_AUDIT_LIVE: "all"
     tests:
       - "tests/e2e/test_agent_api_health.py"
       - "tests/e2e/test_agent_fleet_audit.py"
