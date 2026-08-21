@@ -55,32 +55,33 @@ if __name__ == "__main__":
 # Environment & Resource Constants
 def _get_required_env(var_name: str) -> str:
     val = os.environ.get(var_name)
-    if val:
-        return val
-    if var_name == "KUBE_CONTEXT":
-        try:
-            ctx = subprocess.run(["kubectl", "config", "current-context"], capture_output=True, text=True).stdout.strip()
-            if ctx:
-                return ctx
-        except Exception:
-            pass
-        return os.environ.get("MGMT_CONTEXT", "")
-    elif var_name == "NAMESPACE":
-        return os.environ.get("AGENT_NAMESPACE", "kubeagents-system")
-    elif var_name == "REGISTRY":
-        reg = os.environ.get("REGISTRY") or os.environ.get("CONTAINER_REGISTRY") or os.environ.get("REGISTRY_PREFIX")
-        if reg:
-            return reg
-        project_id = os.environ.get("GCP_PROJECT_ID") or os.environ.get("PROJECT_ID")
-        region = os.environ.get("GCP_REGION") or os.environ.get("REGION") or "us-east4"
-        if project_id:
-            return f"{region}-docker.pkg.dev/{project_id}/kube-agents"
-        return ""
-    return ""
+    if not val:
+        raise ValueError(f"Environment variable '{var_name}' must be set.")
+    return val
 
-KUBE_CONTEXT: str = _get_required_env("KUBE_CONTEXT")
-NAMESPACE: str = _get_required_env("NAMESPACE")
-REGISTRY: str = _get_required_env("REGISTRY")
+def get_kube_context() -> str:
+    val = os.environ.get("KUBE_CONTEXT")
+    if not val:
+        raise ValueError("Environment variable 'KUBE_CONTEXT' must be explicitly set to run operator tests.")
+    return val
+
+def get_namespace() -> str:
+    return os.environ.get("NAMESPACE") or os.environ.get("AGENT_NAMESPACE") or "kubeagents-system"
+
+def get_registry() -> str:
+    reg = os.environ.get("REGISTRY") or os.environ.get("CONTAINER_REGISTRY") or os.environ.get("REGISTRY_PREFIX")
+    if reg:
+        return reg
+    return _get_required_env("REGISTRY")
+
+if __name__ == "__main__":
+    KUBE_CONTEXT: str = _get_required_env("KUBE_CONTEXT")
+    NAMESPACE: str = _get_required_env("NAMESPACE")
+    REGISTRY: str = _get_required_env("REGISTRY")
+else:
+    KUBE_CONTEXT = os.environ.get("KUBE_CONTEXT", "")
+    NAMESPACE = os.environ.get("NAMESPACE", os.environ.get("AGENT_NAMESPACE", "kubeagents-system"))
+    REGISTRY = os.environ.get("REGISTRY", "")
 
 # How container images are produced:
 #   docker - local docker build/push against the real Dockerfiles (needs a daemon)
@@ -340,13 +341,13 @@ def build_and_push_plugin_image(image: str, context_dir: str | Path) -> None:
 
 def run_kubectl(args: list[str], check: bool = True, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
     """Prepend context to kubectl command."""
-    full_cmd = ["kubectl", "--context", KUBE_CONTEXT] + args
+    full_cmd = ["kubectl", "--context", get_kube_context()] + args
     return run_cmd(full_cmd, check=check, capture_output=capture_output)
 
 
 def get_kubectl_output(args: list[str]) -> str:
     """Execute kubectl command silently, asserting zero exit code, and return stripped stdout."""
-    full_cmd = ["kubectl", "--context", KUBE_CONTEXT] + args
+    full_cmd = ["kubectl", "--context", get_kube_context()] + args
     res = subprocess.run(full_cmd, check=True, text=True, encoding="utf-8", errors="replace", capture_output=True)
     return res.stdout.strip()
 
@@ -361,7 +362,7 @@ def poll_plugin_status(plugin_name: str, want_reason: str, timeout_sec: int = 90
     phase, reason, message = "", "", ""
     end = time.time() + timeout_sec
     while True:
-        raw = get_kubectl_output(["get", "agentplugin", plugin_name, "-n", NAMESPACE, "-o", "json"])
+        raw = get_kubectl_output(["get", "agentplugin", plugin_name, "-n", get_namespace(), "-o", "json"])
         status = json.loads(raw).get("status", {})
         phase = status.get("phase", "")
         ready = next((c for c in status.get("conditions", []) if c.get("type") == "Ready"), {})
@@ -383,7 +384,7 @@ def apply_crd_manifests(crd_dir: Path) -> None:
 
 def apply_kubectl_manifest(manifest: str) -> None:
     """Apply a YAML manifest via kubectl stdin and raise exception if non-zero exit code."""
-    full_cmd = ["kubectl", "--context", KUBE_CONTEXT, "apply", "-f", "-"]
+    full_cmd = ["kubectl", "--context", get_kube_context(), "apply", "-f", "-"]
     print(f"\n$ {' '.join(full_cmd)} (stdin manifest)", flush=True)
     res = subprocess.run(full_cmd, input=manifest, text=True, encoding="utf-8", errors="replace", capture_output=True)
     if res.stdout:
@@ -1681,20 +1682,22 @@ def test_e2e_operator_cluster(rebuild_operator: bool = False, test_destructive_c
     By default (rebuild_operator=False), runs non-destructively on the existing operator deployment.
     Pass --rebuild-operator / --deploy-operator or REBUILD_OPERATOR=true to build and deploy the operator.
     """
-    if not REGISTRY:
+    ctx = os.environ.get("KUBE_CONTEXT")
+    reg = get_registry() if (os.environ.get("REGISTRY") or os.environ.get("CONTAINER_REGISTRY") or os.environ.get("REGISTRY_PREFIX")) else ""
+    if not ctx or not reg:
         import pytest
-        pytest.skip("REGISTRY environment variable unset; skipping operator plugin validation.")
+        pytest.skip("KUBE_CONTEXT and REGISTRY environment variables must be set; skipping operator plugin validation.")
 
     rebuild = rebuild_operator or REBUILD_OPERATOR
     destructive_crd = test_destructive_crd or TEST_DESTRUCTIVE_CRD
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     operator_tag = f"v{timestamp}"
-    operator_image = f"{REGISTRY}/k8s-operator:{operator_tag}"
+    operator_image = f"{reg}/k8s-operator:{operator_tag}"
 
     unique_str = f"e2e-build-{timestamp}-{random.randint(1000, 9999)}"
     plugin_tag = f"v{timestamp}"
-    plugin_image = f"{REGISTRY}/example-plugin:{plugin_tag}"
+    plugin_image = f"{reg}/example-plugin:{plugin_tag}"
 
     log(f"Starting E2E Operator & AgentPlugins Validation (rebuild_operator={rebuild}, test_destructive_crd={destructive_crd})")
     log(f"Plugin Image:   {plugin_image}")
