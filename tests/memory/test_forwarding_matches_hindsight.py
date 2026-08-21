@@ -42,13 +42,31 @@ from types import SimpleNamespace
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _HERMES = os.environ.get("HERMES_ROOT") or "/opt/hermes"
-if os.path.isdir(_HERMES):
-    sys.path.insert(0, _HERMES)
-sys.path.insert(0, os.path.join(_REPO, "agents", "chat", "plugins", "memory"))
+import unittest
 
-from agent.memory_manager import MemoryManager  # noqa: E402
-from kube_agents_memory import KubeAgentsMemoryProvider  # noqa: E402
-from plugins.memory.hindsight import HindsightMemoryProvider as Stock  # noqa: E402
+try:
+    from . import conftest  # noqa: F401
+except Exception:
+    try:
+        import conftest  # noqa: F401
+    except Exception:
+        pass
+
+try:
+    from agent.memory_manager import MemoryManager  # noqa: E402
+    from kube_agents_memory import KubeAgentsMemoryProvider  # noqa: E402
+    from plugins.memory.hindsight import HindsightMemoryProvider as Stock  # noqa: E402
+    _HERMES_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    _HERMES_AVAILABLE = False
+    MemoryManager = None
+    KubeAgentsMemoryProvider = None
+    Stock = None
+
+
+def setUpModule():
+    if not _HERMES_AVAILABLE:
+        raise unittest.SkipTest("Hermes (HERMES_ROOT or /opt/hermes) required for stock signature reflection tests")
 
 # Every method KubeAgentsMemoryProvider hands to _call. ``on_session_end`` is on
 # the list because the wrapper forwards it even though the stock provider does
