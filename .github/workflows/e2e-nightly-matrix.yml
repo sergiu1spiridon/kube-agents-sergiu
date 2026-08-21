@@ -82,6 +82,7 @@ jobs:
           GITHUB_ORG: ${{ vars.GH_ORG || vars.GITHUB_ORG || 'test-org-kube-agent' }}
           GITHUB_REPO: ${{ vars.GH_REPO || vars.GITHUB_REPO || 'test-org-kube-agent/agents-repo' }}
           STOCKOUT_SCENARIOS: ${{ inputs.stockout_scenarios || 'all' }}
+          FLEET_AUDIT_LIVE: "all"
           CHAT_TOPIC_NAME: ${{ vars.CHAT_TOPIC_NAME }}
           E2E_CHAT_CLIENT_ID: ${{ secrets.E2E_CHAT_CLIENT_ID }}
           E2E_CHAT_CLIENT_SECRET: ${{ secrets.E2E_CHAT_CLIENT_SECRET }}
