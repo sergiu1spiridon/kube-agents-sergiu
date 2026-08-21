@@ -30,6 +30,13 @@ _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
 def pytest_configure(config: pytest.Config) -> None:
     """Configures session environment variables and ensures kubeconfig authentication."""
+    if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ and os.path.isfile(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]):
+        subprocess.run(
+            ["gcloud", "auth", "activate-service-account", f"--key-file={os.environ['GOOGLE_APPLICATION_CREDENTIALS']}", "--quiet"],
+            capture_output=True,
+        )
+        del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+
     if "CLOUDSDK_PYTHON" in os.environ:
         del os.environ["CLOUDSDK_PYTHON"]
     os.environ["CLOUDSDK_PYTHON_SITEPACKAGES"] = "0"
@@ -246,7 +253,7 @@ def ensure_cluster_credentials(
     gke_cluster_name: Optional[str],
     gcp_region: str,
 ) -> None:
-    """Configures kubectl context for the target GKE cluster."""
+    """Configures kubectl context for the target GKE cluster and embeds bearer token."""
     if gcp_project_id and gke_cluster_name and gcp_region:
         subprocess.run(
             [
@@ -258,6 +265,22 @@ def ensure_cluster_credentials(
             capture_output=True,
             text=True,
         )
+        token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
+        token = token_res.stdout.strip()
+        if token_res.returncode == 0 and token:
+            try:
+                view_res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
+                if view_res.returncode == 0 and view_res.stdout.strip():
+                    data = json.loads(view_res.stdout)
+                    for user_entry in data.get("users", []):
+                        user_entry.get("user", {}).pop("exec", None)
+                        user_entry.setdefault("user", {})["token"] = token
+                    kubeconfig_env = os.environ.get("KUBECONFIG")
+                    p = pathlib.Path(kubeconfig_env) if kubeconfig_env else (pathlib.Path.home() / ".kube" / "config")
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception:
+                pass
 
 
 

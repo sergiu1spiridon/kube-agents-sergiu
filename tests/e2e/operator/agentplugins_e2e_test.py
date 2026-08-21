@@ -188,9 +188,13 @@ def run_cmd(
     run_env = {
         **os.environ,
         "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
+        "CLOUDSDK_PYTHON_SITEPACKAGES": "0",
+        "PYTHONNOUSERSITE": "1",
         **(env or {}),
     }
-    if "CLOUDSDK_PYTHON" in run_env and run_env["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+    if "GOOGLE_APPLICATION_CREDENTIALS" in run_env:
+        del run_env["GOOGLE_APPLICATION_CREDENTIALS"]
+    if "CLOUDSDK_PYTHON" in run_env:
         del run_env["CLOUDSDK_PYTHON"]
     res = subprocess.run(
         cmd, cwd=cwd, check=False, text=True, encoding="utf-8", errors="replace", capture_output=True, env=run_env
