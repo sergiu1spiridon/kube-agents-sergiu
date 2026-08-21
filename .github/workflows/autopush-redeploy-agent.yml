@@ -40,7 +40,7 @@ jobs:
       (github.event.workflow_run.event == 'push' ||
        github.event.workflow_run.event == 'workflow_dispatch') &&
       github.event.workflow_run.head_branch == 'main'
-    uses: ./.github/workflows/reusable-deploy-agent.yml
+    uses: ./.github/workflows/reusable-deploy-agent.yml # zizmor: ignore[secrets-inherit]
     with:
       target_environment: "autopush"
       image_tag: ${{ github.event.workflow_run.head_sha }}
