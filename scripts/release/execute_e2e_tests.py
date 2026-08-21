@@ -47,12 +47,14 @@ def load_yaml_config(config_path: pathlib.Path) -> Dict[str, Any]:
         cfg: Dict[str, Any] = {"defaults": {}, "environments": []}
         current_env: Optional[Dict[str, Any]] = None
         in_env_vars = False
+        in_tests = False
         for line in content.splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
             if stripped.startswith("- name:"):
                 in_env_vars = False
+                in_tests = False
                 if current_env:
                     cfg["environments"].append(current_env)
                 name = stripped.split(":", 1)[1].strip().strip('"\'')
@@ -61,11 +63,17 @@ def load_yaml_config(config_path: pathlib.Path) -> Dict[str, Any]:
                     "tests": [],
                     "env_vars": {},
                 }
+            elif current_env and stripped.startswith("tests:"):
+                in_tests = True
+                in_env_vars = False
+            elif current_env and in_tests and stripped.startswith("- "):
+                current_env["tests"].append(stripped.lstrip("- ").strip().strip('"\''))
             elif current_env and stripped.startswith("- ") and "tests/" in stripped:
                 in_env_vars = False
                 current_env["tests"].append(stripped.lstrip("- ").strip().strip('"\''))
             elif current_env and stripped.startswith("env_vars:"):
                 in_env_vars = True
+                in_tests = False
             elif current_env and in_env_vars and ":" in stripped:
                 indent = len(line) - len(line.lstrip())
                 if indent >= 4 or line.startswith("    ") or line.startswith("\t"):
@@ -74,11 +82,13 @@ def load_yaml_config(config_path: pathlib.Path) -> Dict[str, Any]:
                 else:
                     in_env_vars = False
                     k, v = stripped.split(":", 1)
-                    current_env[k.strip().lstrip("- ")] = v.strip().strip('"\'')
+                    if k.strip() != "tests":
+                        current_env[k.strip().lstrip("- ")] = v.strip().strip('"\'')
             elif current_env and ":" in stripped:
                 in_env_vars = False
                 k, v = stripped.split(":", 1)
-                current_env[k.strip().lstrip("- ")] = v.strip().strip('"\'')
+                if k.strip() != "tests":
+                    current_env[k.strip().lstrip("- ")] = v.strip().strip('"\'')
         if current_env:
             cfg["environments"].append(current_env)
         return cfg
