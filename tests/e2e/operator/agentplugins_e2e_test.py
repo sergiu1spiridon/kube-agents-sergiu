@@ -1417,7 +1417,7 @@ spec:
         # Withdrawing the plugin has to undo both halves. A stale link would leave a
         # dangling entry in the profile's plugins dir, and a stale plugins.enabled entry
         # would make Hermes try to import a plugin whose files are gone.
-        run_kubectl(["delete", "agentplugin", TARGETED_PLUGIN_CR_NAME, "-n", NAMESPACE])
+        run_kubectl(["delete", "agentplugin", TARGETED_PLUGIN_CR_NAME, "-n", NAMESPACE, "--ignore-not-found=true"])
         reconcile_and_wait()
 
         link = profile_plugin_link(TARGET_PROFILE, TARGETED_PLUGIN_CR_NAME)
@@ -1588,7 +1588,7 @@ spec:
         log("Verified both overlays merged into the cluster profile and the plugin is linked.")
 
         # Withdrawing the per-profile overlay must not take the class overlay with it.
-        run_kubectl(["delete", "agentplugin", CLUSTER_PLUGIN_CR_NAME, "-n", NAMESPACE])
+        run_kubectl(["delete", "agentplugin", CLUSTER_PLUGIN_CR_NAME, "-n", NAMESPACE, "--ignore-not-found=true"])
         reconcile_and_wait()
 
         withdrawn = agent_exec_until(

@@ -285,7 +285,10 @@ def port_forward_agent(
         yield None
         return
 
-    port = os.environ.get("AGENT_LOCAL_PORT", "8642")
+    import socket
+
+    port_str = os.environ.get("AGENT_LOCAL_PORT", "8642")
+    port = int(port_str)
     url = f"http://127.0.0.1:{port}"
 
     proc = subprocess.Popen(
@@ -298,9 +301,31 @@ def port_forward_agent(
             f"{port}:8642",
         ],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
-    time.sleep(3)  # Allow socket to bind
+
+    # Wait up to 15s for the local socket to accept connections
+    connected = False
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            break
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                connected = True
+                break
+        except (OSError, ConnectionRefusedError):
+            time.sleep(0.5)
+
+    if not connected:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+        yield None
+        return
 
     try:
         yield url

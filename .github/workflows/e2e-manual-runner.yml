@@ -11,6 +11,7 @@ on:
         options:
           - "cluster-e2e"
           - "audit-e2e"
+          - "operator-e2e"
           - "gchat-e2e"
           - "all"
       stockout_scenarios:

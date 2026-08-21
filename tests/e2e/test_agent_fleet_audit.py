@@ -144,18 +144,20 @@ if p_refresh.returncode == 0 and p_refresh.stdout.strip():
         sys.exit(res_ref.returncode)
 
 # 2. Execute read-only GitHub API verification via Envoy proxy from workspace root
-cmd_gh = ['gh', 'api', 'repos/{github_repo}', '--jq', '.full_name']
-res_gh = subprocess.run(cmd_gh, cwd='/opt/data', capture_output=True, text=True)
+env = os.environ.copy()
+env['PWD'] = '/opt/data'
+cmd_gh = ['gh', 'api', f'repos/{github_repo}', '--jq', '.full_name']
+res_gh = subprocess.run(cmd_gh, cwd='/opt/data', env=env, capture_output=True, text=True)
 if res_gh.returncode != 0:
-    print(f"GitHub API query failed: {{res_gh.stderr}}", file=sys.stderr)
+    print(f"GitHub API query failed: {res_gh.stderr}", file=sys.stderr)
     sys.exit(res_gh.returncode)
 
 full_name = res_gh.stdout.strip()
 if full_name.lower() != '{github_repo}'.lower():
-    print(f"Expected repository '{github_repo}', got '{{full_name}}'", file=sys.stderr)
+    print(f"Expected repository '{github_repo}', got '{full_name}'", file=sys.stderr)
     sys.exit(1)
 
-print(f"Successfully authenticated and queried repository: {{full_name}}")
+print(f"Successfully authenticated and queried repository: {full_name}")
 """
 
     cmd = [
@@ -233,6 +235,7 @@ script_path = p.stdout.strip().splitlines()[0]
 # Use an ephemeral lease workspace under /opt/data to avoid colliding with or resetting the cron lease
 tmp_dir = tempfile.mkdtemp(dir="/opt/data")
 env = os.environ.copy()
+env["PWD"] = "/opt/data"
 env["GITOPS_WORKSPACE"] = tmp_dir
 env["SCRATCH_DIR"] = tmp_dir
 
