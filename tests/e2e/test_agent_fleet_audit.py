@@ -254,12 +254,16 @@ def test_audit_report_ledger_dryrun_all_streams(
     human_name: str,
     gke_cluster_name: Optional[str],
     gcp_project_id: Optional[str],
+    fleet_audit_streams: str,
 ) -> None:
-    """Exercises deterministic GitHub ledger issue & PR formatting across all 7 audit streams using --dry-run.
+    """Exercises deterministic GitHub ledger issue & PR formatting across audit streams using --dry-run.
 
     Validates schema compliance, checks roster enforcement, and verifies ledger rendering
     without mutating live GitHub repositories.
     """
+    if fleet_audit_streams not in ("all", "*") and audit_id != fleet_audit_streams and audit_id not in fleet_audit_streams.split(","):
+        pytest.skip(f"Skipping audit stream '{audit_id}' (FLEET_AUDIT_STREAMS={fleet_audit_streams})")
+
     if not _AUDIT_REPORT_SCRIPT.is_file():
         pytest.skip("audit_report.py not found; skipping audit stream validation.")
 
@@ -338,6 +342,7 @@ def test_audit_report_github_api_lifecycle_mocked(
     audit_id: str,
     human_name: str,
     tmp_path: pathlib.Path,
+    fleet_audit_streams: str,
 ) -> None:
     """Verifies that each audit watchdog executes the exact expected GitHub API lifecycle.
 
@@ -348,6 +353,9 @@ def test_audit_report_github_api_lifecycle_mocked(
     4. It updates the ledger issue title and body with the rendered capacity audit tables.
     5. It strictly does NOT create unexpected pull requests without explicit authorization.
     """
+    if fleet_audit_streams not in ("all", "*") and audit_id != fleet_audit_streams and audit_id not in fleet_audit_streams.split(","):
+        pytest.skip(f"Skipping audit stream '{audit_id}' (FLEET_AUDIT_STREAMS={fleet_audit_streams})")
+
     if not _AUDIT_REPORT_SCRIPT.is_file():
         pytest.skip("audit_report.py not found; skipping mock GitHub API lifecycle test.")
 

@@ -170,6 +170,13 @@ def fleet_audit_live() -> str:
 
 
 @pytest.fixture(scope="session")
+def fleet_audit_streams() -> str:
+    """Resolves FLEET_AUDIT_STREAMS filter ('all' or specific stream name like 'stockout-prevention')."""
+    val = os.environ.get("FLEET_AUDIT_STREAMS", "all")
+    return str(val).strip().lower()
+
+
+@pytest.fixture(scope="session")
 def github_repo(agent_namespace: str) -> Optional[str]:
     """Resolves the registered GitOps/Audit repository (owner/repo)."""
     val = os.environ.get("GITHUB_REPO") or os.environ.get("GITOPS_REPO")

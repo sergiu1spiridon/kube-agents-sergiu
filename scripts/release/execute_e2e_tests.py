@@ -109,6 +109,23 @@ def connect_gke_credentials(project_id: str, cluster_name: str, region: str) -> 
         )
         return
 
+    # Strip exec plugin from kubeconfig and embed active bearer token to avoid Python collisions
+    token_proc = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True)
+    if token_proc.returncode == 0 and token_proc.stdout.strip():
+        token = token_proc.stdout.strip()
+        raw_cfg = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True)
+        if raw_cfg.returncode == 0 and raw_cfg.stdout.strip():
+            try:
+                data = json.loads(raw_cfg.stdout)
+                for u in data.get("users", []):
+                    u.get("user", {}).pop("exec", None)
+                    u.setdefault("user", {})["token"] = token
+                cfg_path = pathlib.Path(os.environ.get("KUBECONFIG") or (pathlib.Path.home() / ".kube" / "config"))
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
     print(f"✓ Connected kubectl context to cluster '{cluster_name}' in '{region}'.")
 
 
@@ -145,10 +162,15 @@ def run_environment_tests(
         connect_gke_credentials(project_id, cluster_name, region)
 
     # Merge custom environment variables: YAML defaults must not override explicit workflow environment
+    custom_env_vars = env.get("env_vars", {})
+    kube_ctx = os.environ.get("KUBE_CONTEXT") or (f"gke_{project_id}_{region}_{cluster_name}" if (project_id and cluster_name and region) else "")
+    reg = os.environ.get("REGISTRY") or os.environ.get("REGISTRY_PREFIX") or (f"{region}-docker.pkg.dev/{project_id}/kube-agents" if (project_id and region) else "")
     env_vars = {
         **custom_env_vars,
         **os.environ,
         "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
+        "CLOUDSDK_PYTHON_SITEPACKAGES": "0",
+        "PYTHONNOUSERSITE": "1",
         "PATH": f"{pathlib.Path.home()}/.local/bin:{os.environ.get('PATH', '')}",
         "GCP_PROJECT_ID": project_id,
         "GKE_CLUSTER_NAME": cluster_name,
@@ -157,7 +179,7 @@ def run_environment_tests(
         "KUBE_CONTEXT": kube_ctx,
         "REGISTRY": reg,
     }
-    if "CLOUDSDK_PYTHON" in env_vars and env_vars["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+    if "CLOUDSDK_PYTHON" in env_vars:
         del env_vars["CLOUDSDK_PYTHON"]
 
     pytest_bin = find_pytest_executable()
