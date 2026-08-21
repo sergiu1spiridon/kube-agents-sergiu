@@ -37,24 +37,22 @@ def pytest_configure(config: pytest.Config) -> None:
     if "USE_GKE_GCLOUD_AUTH_PLUGIN" not in os.environ:
         os.environ["USE_GKE_GCLOUD_AUTH_PLUGIN"] = "True"
 
-    # Inject bearer token into current kubeconfig user if available and remove exec plugin
+    # Inject bearer token into current kubeconfig users if available and strip exec plugin
     try:
         token_proc = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, timeout=10)
         if token_proc.returncode == 0 and token_proc.stdout.strip():
             token = token_proc.stdout.strip()
-            ctx_proc = subprocess.run(["kubectl", "config", "current-context"], capture_output=True, text=True, timeout=5)
-            if ctx_proc.returncode == 0 and ctx_proc.stdout.strip():
-                ctx = ctx_proc.stdout.strip()
-                user_proc = subprocess.run(
-                    ["kubectl", "config", "view", "-o", f"jsonpath={{.contexts[?(@.name==\"{ctx}\")].context.user}}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if user_proc.returncode == 0 and user_proc.stdout.strip():
-                    user_name = user_proc.stdout.strip()
-                    subprocess.run(["kubectl", "config", "unset", f"users.{user_name}.exec"], capture_output=True, timeout=5)
-                    subprocess.run(["kubectl", "config", "set-credentials", user_name, f"--token={token}"], capture_output=True, timeout=5)
+            res = subprocess.run(["kubectl", "config", "view", "--raw", "-o", "json"], capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                import json
+                data = json.loads(res.stdout)
+                for u in data.get("users", []):
+                    u.get("user", {}).pop("exec", None)
+                    u.setdefault("user", {})["token"] = token
+                cfg_file = os.environ.get("KUBECONFIG") or str(pathlib.Path.home() / ".kube" / "config")
+                p = pathlib.Path(cfg_file)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(json.dumps(data, indent=2), encoding="utf-8")
     except Exception:
         pass
 
