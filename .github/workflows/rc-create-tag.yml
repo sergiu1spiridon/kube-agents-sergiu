@@ -41,7 +41,6 @@ on:
 jobs:
   create-tag:
     runs-on: ubuntu-latest
-    environment: rc
     permissions:
       contents: write
     outputs:
@@ -54,7 +53,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+          token: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
 
       - name: Resolve Commit SHA and Tag Name
         id: resolve_target
