@@ -12,6 +12,10 @@ import argparse
 import json
 import os
 import pathlib
+import subprocess
+import sys
+from typing import Any, Dict, List, Optional
+
 # Prevent google-auth ADC / site-packages crash in gcloud/kubectl
 if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ and os.path.isfile(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]):
     subprocess.run(
