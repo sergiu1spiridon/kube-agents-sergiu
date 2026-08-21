@@ -25,6 +25,7 @@ on:
 jobs:
   validate-tag:
     runs-on: ubuntu-latest
+    environment: rc
     permissions:
       contents: write
 
@@ -33,7 +34,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
 
       - name: Resolve Commit SHA from Release Tag
         id: resolve_target
@@ -48,7 +49,7 @@ jobs:
         with:
           ref: ${{ steps.resolve_target.outputs.commit_sha }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
 
       - name: Validate Release Candidate Commit
         env:

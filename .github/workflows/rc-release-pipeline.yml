@@ -63,6 +63,7 @@ jobs:
       github.repository == 'gke-labs/kube-agents' &&
       needs.step-1-create-tag.outputs.skip_rc != 'true'
     runs-on: ubuntu-latest
+    environment: rc
     concurrency:
       group: rc-environment
       cancel-in-progress: false
@@ -88,11 +89,11 @@ jobs:
       - name: Install Python Dependencies
         run: ./scripts/release/install_e2e_deps.sh
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud via Workload Identity Federation (WIF)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || '' }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT || '' }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           credentials_json: ${{ secrets.GCP_SA_KEY || '' }}
 
       - name: Set up Google Cloud SDK
