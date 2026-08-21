@@ -273,7 +273,7 @@ def platform_agent_api_key(agent_namespace: str) -> Optional[str]:
             return base64.b64decode(raw_key).decode("utf-8")
     except Exception:
         pass
-    return os.environ.get("PLATFORM_AGENT_TOKEN") or os.environ.get("API_SERVER_KEY")
+    return os.environ.get("PLATFORM_AGENT_TOKEN") or os.environ.get("API_SERVER_KEY") or "cluster-internal-trusted"
 
 
 @pytest.fixture(scope="session")
@@ -291,47 +291,60 @@ def port_forward_agent(
     port = int(port_str)
     url = f"http://127.0.0.1:{port}"
 
-    proc = subprocess.Popen(
-        [
-            "kubectl",
-            "port-forward",
-            "svc/platform-agent",
-            "-n",
-            agent_namespace,
-            f"{port}:8642",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    targets = [
+        "svc/platform-agent",
+        "deployment/platform-agent-gateway",
+    ]
 
-    # Wait up to 15s for the local socket to accept connections
+    proc = None
     connected = False
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            break
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                connected = True
-                break
-        except (OSError, ConnectionRefusedError):
-            time.sleep(0.5)
 
-    if not connected:
+    for target in targets:
+        proc = subprocess.Popen(
+            [
+                "kubectl",
+                "port-forward",
+                target,
+                "-n",
+                agent_namespace,
+                f"{port}:8642",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                break
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1):
+                    connected = True
+                    break
+            except (OSError, ConnectionRefusedError):
+                time.sleep(0.4)
+
+        if connected:
+            break
+
         if proc.poll() is None:
             proc.terminate()
             try:
-                proc.wait(timeout=3)
+                proc.wait(timeout=2)
             except Exception:
                 proc.kill()
+        proc = None
+
+    if not connected or proc is None:
         yield None
         return
 
     try:
         yield url
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()

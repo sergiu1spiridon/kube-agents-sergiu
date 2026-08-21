@@ -51,6 +51,7 @@ environments:
     env_vars:
       GITHUB_ORG: "test-org-kube-agent"
       GITHUB_REPO: "test-org-kube-agent/agents-repo"
+      FLEET_AUDIT_LIVE: "all"
     tests:
       - "tests/e2e/test_agent_api_health.py"
       - "tests/e2e/test_agent_fleet_audit.py"
