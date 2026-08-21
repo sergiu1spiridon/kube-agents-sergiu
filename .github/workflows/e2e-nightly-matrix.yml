@@ -4,6 +4,7 @@ on:
   schedule:
     # Run nightly at 02:00 UTC
     - cron: "0 2 * * *"
+  #checkov:skip=CKV_GHA_7:Nightly manual test dispatch requires scenario and target environment filter parameters
   workflow_dispatch:
     inputs:
       stockout_scenarios:
