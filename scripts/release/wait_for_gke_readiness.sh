@@ -26,7 +26,9 @@ export CLOUDSDK_PYTHON="${CLOUDSDK_PYTHON:-/usr/bin/python3}"
 export USE_GKE_GCLOUD_AUTH_PLUGIN="True"
 
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
-  gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" || true
+  gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" --quiet || true
+  # Unset to prevent gke-gcloud-auth-plugin from attempting broken ADC service-account wrapper loading
+  unset GOOGLE_APPLICATION_CREDENTIALS
 fi
 
 gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"

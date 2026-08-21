@@ -42,6 +42,9 @@ from types import SimpleNamespace
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _HERMES = os.environ.get("HERMES_ROOT") or "/opt/hermes"
+if os.path.isdir(_HERMES):
+    sys.path.insert(0, _HERMES)
+sys.path.insert(0, os.path.join(_REPO, "agents", "chat", "plugins", "memory"))
 import unittest
 
 try:
@@ -247,6 +250,9 @@ def test_a_failed_forward_is_not_silent():
 
 
 if __name__ == "__main__":
+    if not _HERMES_AVAILABLE:
+        print("SKIP  Hermes (HERMES_ROOT or /opt/hermes) not available")
+        sys.exit(0)
     failed = 0
     for name, fn in sorted(globals().items()):
         if not name.startswith("test_") or not callable(fn):
@@ -254,7 +260,7 @@ if __name__ == "__main__":
         try:
             fn()
             print(f"ok    {name}")
-        except AssertionError as e:
+        except Exception as e:
             failed += 1
             print(f"FAIL  {name}: {e}")
     print("\nall pass" if not failed else f"\n{failed} failed")

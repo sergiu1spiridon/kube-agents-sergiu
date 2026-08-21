@@ -89,15 +89,23 @@ def ensure_stockout_plugin_installed(
             capture_output=True,
         )
 
-    # 2. Ensure AgentPlugin CRD is applied
-    crd_manifest = _REPO_ROOT / "k8s-operator" / "config" / "crd" / "bases" / "kubeagents.x-k8s.io_agentplugins.yaml"
-    if crd_manifest.is_file():
-        subprocess.run(["kubectl", "apply", "-f", str(crd_manifest)], capture_output=True)
+    # 2. Verify AgentPlugin CRD exists on cluster (installed canonically via Helm chart)
+    check_crd = subprocess.run(
+        ["kubectl", "get", "crd", "agentplugins.kubeagents.x-k8s.io"],
+        capture_output=True,
+        text=True,
+    )
+    if check_crd.returncode != 0:
+        pytest.skip(
+            "AgentPlugin CRD 'agentplugins.kubeagents.x-k8s.io' not found on cluster; "
+            "it is managed and installed by the kube-agents Helm chart."
+        )
 
     # 3. Check if gkestockoutinvestigator is registered
     check_plugin = subprocess.run(
         ["kubectl", "get", "agentplugins", "gkestockoutinvestigator", "-n", agent_namespace],
         capture_output=True,
+        text=True,
     )
     if check_plugin.returncode != 0:
         # Try to install from local helm/kustomize template if available

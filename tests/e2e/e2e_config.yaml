@@ -30,17 +30,20 @@ environments:
   # 2. General Cluster / SRE / Stockout E2E Environment
   # ----------------------------------------------------------------------------
   - name: "cluster-e2e"
-    description: "Core harness tests: Agent API health, Fleet SRE Audit, and Stockout Investigation"
+    description: "Core harness tests: Agent API health, Google Chat, Fleet SRE Audit, Stockout Investigation, and Operator Plugins"
     region: "us-east4"
     namespace: "kubeagents-system"
     env_vars:
+      CHAT_TOPIC_NAME: "platform-agent-chat-events"
       GITHUB_ORG: "test-org-kube-agent"
       GITHUB_REPO: "test-org-kube-agent/agents-repo"
       STOCKOUT_SCENARIOS: "04"
     tests:
       - "tests/e2e/test_agent_api_health.py"
+      - "tests/e2e/gchat_agent_test.py"
       - "tests/e2e/test_agent_fleet_audit.py"
       - "tests/e2e/test_stockout_investigation.py"
+      - "tests/e2e/operator/agentplugins_e2e_test.py"
 
   # ----------------------------------------------------------------------------
   # 3. Fleet SRE Audit E2E Environment

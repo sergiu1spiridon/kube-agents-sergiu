@@ -15,11 +15,19 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-import google.auth
-from google.auth.credentials import Credentials
-from google.oauth2.credentials import Credentials as UserCredentials
-from googleapiclient.discovery import Resource, build
-from googleapiclient.errors import HttpError
+try:
+    import google.auth
+    from google.auth.credentials import Credentials
+    from google.oauth2.credentials import Credentials as UserCredentials
+    from googleapiclient.discovery import Resource, build
+    from googleapiclient.errors import HttpError
+    HAS_GOOGLE_LIBS = True
+except ImportError:
+    HAS_GOOGLE_LIBS = False
+    Credentials = Any  # type: ignore
+    UserCredentials = Any  # type: ignore
+    Resource = Any  # type: ignore
+    HttpError = Exception  # type: ignore
 import pytest
 
 # Configuration from Environment Variables (read dynamically from vars.sh or CI environment)
@@ -52,8 +60,10 @@ SCOPES: list[str] = [
 
 
 @pytest.fixture(scope="module")
-def credentials() -> Credentials:
+def credentials() -> Any:
     """Returns GCP credentials authenticated with required Chat and Pub/Sub scopes."""
+    if not HAS_GOOGLE_LIBS:
+        pytest.skip("google-api-python-client or google-auth not installed; skipping Google Chat E2E test.")
     creds, _ = google.auth.default(scopes=SCOPES)
     return creds
 

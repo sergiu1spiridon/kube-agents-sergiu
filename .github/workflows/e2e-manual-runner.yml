@@ -104,7 +104,7 @@ jobs:
         run: |
           TARGET_ENV="$TEST_ENVIRONMENT"
           if [ "$TARGET_ENV" = "all" ]; then
-            python3 scripts/release/execute_e2e_tests.py
+            python3 scripts/release/execute_e2e_tests.py --env all
           else
             python3 scripts/release/execute_e2e_tests.py --env "$TARGET_ENV"
           fi
