@@ -110,8 +110,10 @@ jobs:
         run: ./scripts/release/wait_for_gke_readiness.sh
 
       - name: Configure Docker Authentication for Artifact Registry
+        env:
+          GCP_REGION: ${{ vars.GCP_REGION }}
         run: |
-          REGION="${{ vars.GCP_REGION || 'us-east4' }}"
+          REGION="${GCP_REGION:-us-east4}"
           gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
 
       - name: Execute E2E Suite
