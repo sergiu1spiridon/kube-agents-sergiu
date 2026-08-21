@@ -21,6 +21,9 @@ on:
       GEMINI_API_KEY:
         description: "Gemini API Key"
         required: true
+      GCP_SA_KEY:
+        description: "Google Cloud Service Account JSON key"
+        required: false
 
 jobs:
   deploy-rc:
