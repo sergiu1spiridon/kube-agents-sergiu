@@ -30,12 +30,14 @@ _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
 def pytest_configure(config: pytest.Config) -> None:
     """Configures session environment variables and ensures kubeconfig authentication."""
-    if "CLOUDSDK_PYTHON" in os.environ and os.environ["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+    if "CLOUDSDK_PYTHON" in os.environ:
         del os.environ["CLOUDSDK_PYTHON"]
+    os.environ["CLOUDSDK_PYTHON_SITEPACKAGES"] = "0"
+    os.environ["PYTHONNOUSERSITE"] = "1"
     if "USE_GKE_GCLOUD_AUTH_PLUGIN" not in os.environ:
         os.environ["USE_GKE_GCLOUD_AUTH_PLUGIN"] = "True"
 
-    # Inject bearer token into current kubeconfig user if available
+    # Inject bearer token into current kubeconfig user if available and remove exec plugin
     try:
         token_proc = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, timeout=10)
         if token_proc.returncode == 0 and token_proc.stdout.strip():
@@ -51,6 +53,7 @@ def pytest_configure(config: pytest.Config) -> None:
                 )
                 if user_proc.returncode == 0 and user_proc.stdout.strip():
                     user_name = user_proc.stdout.strip()
+                    subprocess.run(["kubectl", "config", "unset", f"users.{user_name}.exec"], capture_output=True, timeout=5)
                     subprocess.run(["kubectl", "config", "set-credentials", user_name, f"--token={token}"], capture_output=True, timeout=5)
     except Exception:
         pass

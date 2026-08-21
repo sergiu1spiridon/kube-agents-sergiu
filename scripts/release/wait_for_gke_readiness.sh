@@ -23,6 +23,8 @@ echo "Readiness Timeout: ${READINESS_TIMEOUT} (5 minutes)"
 echo "======================================================================"
 
 unset CLOUDSDK_PYTHON || true
+export CLOUDSDK_PYTHON_SITEPACKAGES="0"
+export PYTHONNOUSERSITE="1"
 export USE_GKE_GCLOUD_AUTH_PLUGIN="True"
 
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
@@ -35,15 +37,32 @@ gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"
 gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION}" --project "${PROJECT_ID}" \
   ${GKE_DNS_ENDPOINT_FLAG}
 
-# Inject explicit access token into kubeconfig to bypass external auth plugin Python collisions
+# Inject explicit access token into kubeconfig and remove exec auth plugin to avoid Python collisions
 if ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null); then
   CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || true)
   if [ -n "${CURRENT_CONTEXT}" ]; then
     USER_NAME=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"${CURRENT_CONTEXT}\")].context.user}" 2>/dev/null || true)
     if [ -n "${USER_NAME}" ]; then
+      kubectl config unset "users.${USER_NAME}.exec" >/dev/null 2>&1 || true
       kubectl config set-credentials "${USER_NAME}" --token="${ACCESS_TOKEN}" >/dev/null 2>&1 || true
     fi
   fi
+  python3 -c "
+import os, pathlib
+p = pathlib.Path(os.environ.get('KUBECONFIG', pathlib.Path.home() / '.kube' / 'config'))
+if p.is_file():
+    try:
+        import yaml
+        data = yaml.safe_load(p.read_text())
+        if isinstance(data, dict) and 'users' in data:
+            for u in data['users']:
+                if 'user' in u and 'exec' in u['user']:
+                    del u['user']['exec']
+                u.setdefault('user', {})['token'] = '''${ACCESS_TOKEN}'''
+            p.write_text(yaml.safe_dump(data))
+    except Exception:
+        pass
+" 2>/dev/null || true
 fi
 
 echo "🔑 Configuring Docker authentication for Artifact Registry (${REGION}-docker.pkg.dev)..."
