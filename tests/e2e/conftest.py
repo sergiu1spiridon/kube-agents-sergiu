@@ -158,6 +158,13 @@ def agent_namespace() -> str:
 
 
 @pytest.fixture(scope="session")
+def fleet_audit_live() -> str:
+    """Resolves FLEET_AUDIT_LIVE configuration from environment (enabled in nightly matrix)."""
+    val = os.environ.get("FLEET_AUDIT_LIVE", "")
+    return str(val).strip().lower()
+
+
+@pytest.fixture(scope="session")
 def github_repo(agent_namespace: str) -> Optional[str]:
     """Resolves the registered GitOps/Audit repository (owner/repo)."""
     val = os.environ.get("GITHUB_REPO") or os.environ.get("GITOPS_REPO")

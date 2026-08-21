@@ -566,9 +566,9 @@ def test_fleet_audit_live_stream_dispatch(
     port_forward_agent: Optional[str],
     platform_agent_api_key: Optional[str],
     github_repo: Optional[str],
+    fleet_audit_live: str,
 ) -> None:
     """Tests live on-demand audit dispatch for all 7 audit streams when FLEET_AUDIT_LIVE is enabled (Nightly)."""
-    fleet_audit_live = os.environ.get("FLEET_AUDIT_LIVE", "").strip().lower()
     if fleet_audit_live not in ("1", "true", "all", audit_id):
         pytest.skip(f"Live audit execution disabled for '{audit_id}'. Set FLEET_AUDIT_LIVE=all for nightly full runs.")
 
