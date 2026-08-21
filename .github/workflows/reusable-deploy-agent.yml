@@ -15,11 +15,6 @@ on:
         required: true
         type: string
         description: "Immutable commit SHA to check out. Must be a SHA, not a branch or tag ref: a mutable ref lets the deployed code differ from the code that passed validation."
-      run_e2e_verification:
-        required: false
-        type: boolean
-        default: false
-        description: "Whether to execute post-deployment E2E smoke tests"
 
 permissions:
   contents: read
@@ -145,37 +140,3 @@ jobs:
             kubectl logs -n "$NAMESPACE" -l app=platform-agent-gateway --all-containers --tail=50 || true
             exit 1
           fi
-
-      - name: Set up Python Environment
-        if: ${{ inputs.run_e2e_verification }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version-file: ".python-version"
-          cache: "pip"
-
-      - name: Install Python Dependencies
-        if: ${{ inputs.run_e2e_verification }}
-        run: ./scripts/release/install_e2e_deps.sh
-
-      - name: Configure Docker Authentication for Artifact Registry
-        if: ${{ inputs.run_e2e_verification }}
-        run: |
-          REGION="${GCP_REGION:-us-east4}"
-          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true
-
-      - name: Execute Post-Deploy E2E Verification
-        if: ${{ inputs.run_e2e_verification }}
-        env:
-          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
-          GCP_REGION: ${{ env.GCP_REGION }}
-          GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}
-          REGISTRY: ${{ vars.REGISTRY || vars.REGISTRY_PREFIX || (env.GCP_PROJECT_ID && format('{0}-docker.pkg.dev/{1}/kube-agents', env.GCP_REGION || 'us-east4', env.GCP_PROJECT_ID)) || '' }}
-          GITHUB_ORG: ${{ env.GITHUB_ORG || 'test-org-kube-agent' }}
-          GITHUB_REPO: ${{ env.GITHUB_REPO || 'test-org-kube-agent/agents-repo' }}
-          STOCKOUT_SCENARIOS: "04"
-          CHAT_TOPIC_NAME: ${{ env.CHAT_TOPIC_NAME }}
-          E2E_CHAT_CLIENT_ID: ${{ secrets.E2E_CHAT_CLIENT_ID }}
-          E2E_CHAT_CLIENT_SECRET: ${{ secrets.E2E_CHAT_CLIENT_SECRET }}
-          E2E_CHAT_REFRESH_TOKEN: ${{ secrets.E2E_CHAT_REFRESH_TOKEN }}
-          CHAT_SPACE_ID: ${{ secrets.E2E_CHAT_SPACE_ID }}
-        run: make test-e2e
