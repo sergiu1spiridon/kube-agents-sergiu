@@ -22,12 +22,11 @@ echo "Target Commit SHA: ${COMMIT_SHA:-(not specified)}"
 echo "Readiness Timeout: ${READINESS_TIMEOUT} (5 minutes)"
 echo "======================================================================"
 
-export CLOUDSDK_PYTHON="${CLOUDSDK_PYTHON:-/usr/bin/python3}"
+unset CLOUDSDK_PYTHON || true
 export USE_GKE_GCLOUD_AUTH_PLUGIN="True"
 
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
   gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" --quiet || true
-  # Unset to prevent gke-gcloud-auth-plugin from attempting broken ADC service-account wrapper loading
   unset GOOGLE_APPLICATION_CREDENTIALS
 fi
 
@@ -35,6 +34,17 @@ gke_dns_endpoint_flag "${CLUSTER_NAME}" "${REGION}" "${PROJECT_ID}"
 # Unquoted on purpose: empty must contribute no argument. See gke_dns_endpoint.sh.
 gcloud container clusters get-credentials "${CLUSTER_NAME}" --location "${REGION}" --project "${PROJECT_ID}" \
   ${GKE_DNS_ENDPOINT_FLAG}
+
+# Inject explicit access token into kubeconfig to bypass external auth plugin Python collisions
+if ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null); then
+  CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || true)
+  if [ -n "${CURRENT_CONTEXT}" ]; then
+    USER_NAME=$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"${CURRENT_CONTEXT}\")].context.user}" 2>/dev/null || true)
+    if [ -n "${USER_NAME}" ]; then
+      kubectl config set-credentials "${USER_NAME}" --token="${ACCESS_TOKEN}" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
 
 echo "🔑 Configuring Docker authentication for Artifact Registry (${REGION}-docker.pkg.dev)..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet || true

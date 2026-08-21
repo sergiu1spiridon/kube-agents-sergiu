@@ -16,10 +16,6 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
-# Enforce system python for gcloud to prevent google-auth AttributeError crashes in CI
-if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
-    os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
-
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
@@ -149,13 +145,9 @@ def run_environment_tests(
         connect_gke_credentials(project_id, cluster_name, region)
 
     # Merge custom environment variables: YAML defaults must not override explicit workflow environment
-    custom_env_vars = env.get("env_vars", {})
-    kube_ctx = os.environ.get("KUBE_CONTEXT") or (f"gke_{project_id}_{region}_{cluster_name}" if (project_id and cluster_name and region) else "")
-    reg = os.environ.get("REGISTRY") or os.environ.get("REGISTRY_PREFIX") or (f"{region}-docker.pkg.dev/{project_id}/kube-agents" if (project_id and region) else "")
     env_vars = {
         **custom_env_vars,
         **os.environ,
-        "CLOUDSDK_PYTHON": os.environ.get("CLOUDSDK_PYTHON", "/usr/bin/python3"),
         "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
         "PATH": f"{pathlib.Path.home()}/.local/bin:{os.environ.get('PATH', '')}",
         "GCP_PROJECT_ID": project_id,
@@ -165,6 +157,8 @@ def run_environment_tests(
         "KUBE_CONTEXT": kube_ctx,
         "REGISTRY": reg,
     }
+    if "CLOUDSDK_PYTHON" in env_vars and env_vars["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+        del env_vars["CLOUDSDK_PYTHON"]
 
     pytest_bin = find_pytest_executable()
     cmd = [pytest_bin] + tests + ["-v", "-s"] + extra_args

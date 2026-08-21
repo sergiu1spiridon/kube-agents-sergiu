@@ -41,10 +41,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Enforce system python for gcloud to prevent google-auth AttributeError crashes in CI
-if "CLOUDSDK_PYTHON" not in os.environ and Path("/usr/bin/python3").exists():
-    os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
-
 # Enforce UTF-8 stdout/stderr stream handling when invoked directly as a script
 if __name__ == "__main__":
     if hasattr(sys.stdout, "buffer"):
@@ -191,10 +187,11 @@ def run_cmd(
 
     run_env = {
         **os.environ,
-        "CLOUDSDK_PYTHON": os.environ.get("CLOUDSDK_PYTHON", "/usr/bin/python3"),
         "USE_GKE_GCLOUD_AUTH_PLUGIN": "True",
         **(env or {}),
     }
+    if "CLOUDSDK_PYTHON" in run_env and run_env["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+        del run_env["CLOUDSDK_PYTHON"]
     res = subprocess.run(
         cmd, cwd=cwd, check=False, text=True, encoding="utf-8", errors="replace", capture_output=True, env=run_env
     )
@@ -217,8 +214,8 @@ def ensure_docker_registry_auth(image: str) -> None:
         host = image.split("/")[0]
         try:
             env = dict(os.environ)
-            if Path("/usr/bin/python3").exists():
-                env["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
+            if "CLOUDSDK_PYTHON" in env and env["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+                del env["CLOUDSDK_PYTHON"]
             token_res = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, env=env)
             token = token_res.stdout.strip()
             if token:

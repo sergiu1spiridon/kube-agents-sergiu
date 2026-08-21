@@ -9,9 +9,6 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
-    os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
-
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _AUDIT_REPORT_SCRIPT = (
     _REPO_ROOT / "agents" / "platform" / "skills" / "fleet-audit" / "scripts" / "audit_report.py"

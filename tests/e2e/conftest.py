@@ -29,11 +29,31 @@ _DEFAULT_CONFIG_PATH = _REPO_ROOT / "tests" / "e2e" / "e2e_config.yaml"
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Configures session environment variables."""
-    if "CLOUDSDK_PYTHON" not in os.environ and pathlib.Path("/usr/bin/python3").exists():
-        os.environ["CLOUDSDK_PYTHON"] = "/usr/bin/python3"
+    """Configures session environment variables and ensures kubeconfig authentication."""
+    if "CLOUDSDK_PYTHON" in os.environ and os.environ["CLOUDSDK_PYTHON"] == "/usr/bin/python3":
+        del os.environ["CLOUDSDK_PYTHON"]
     if "USE_GKE_GCLOUD_AUTH_PLUGIN" not in os.environ:
         os.environ["USE_GKE_GCLOUD_AUTH_PLUGIN"] = "True"
+
+    # Inject bearer token into current kubeconfig user if available
+    try:
+        token_proc = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, timeout=10)
+        if token_proc.returncode == 0 and token_proc.stdout.strip():
+            token = token_proc.stdout.strip()
+            ctx_proc = subprocess.run(["kubectl", "config", "current-context"], capture_output=True, text=True, timeout=5)
+            if ctx_proc.returncode == 0 and ctx_proc.stdout.strip():
+                ctx = ctx_proc.stdout.strip()
+                user_proc = subprocess.run(
+                    ["kubectl", "config", "view", "-o", f"jsonpath={{.contexts[?(@.name==\"{ctx}\")].context.user}}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if user_proc.returncode == 0 and user_proc.stdout.strip():
+                    user_name = user_proc.stdout.strip()
+                    subprocess.run(["kubectl", "config", "set-credentials", user_name, f"--token={token}"], capture_output=True, timeout=5)
+    except Exception:
+        pass
 
 
 def _parse_yaml_fallback(content: str) -> Dict[str, Any]:
