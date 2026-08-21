@@ -21,7 +21,6 @@ on:
         default: false
         description: "Whether to execute post-deployment E2E smoke tests"
 
-
 permissions:
   contents: read
 
@@ -180,4 +179,3 @@ jobs:
           E2E_CHAT_REFRESH_TOKEN: ${{ secrets.E2E_CHAT_REFRESH_TOKEN }}
           CHAT_SPACE_ID: ${{ secrets.E2E_CHAT_SPACE_ID }}
         run: make test-e2e
-

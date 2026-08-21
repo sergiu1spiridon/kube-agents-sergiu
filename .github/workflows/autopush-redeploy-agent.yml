@@ -47,4 +47,3 @@ jobs:
       checkout_sha: ${{ github.event.workflow_run.head_sha }}
       run_e2e_verification: true
     secrets: inherit
-
