@@ -85,6 +85,7 @@ jobs:
           REGISTRY: ${{ vars.REGISTRY || vars.REGISTRY_PREFIX || (vars.GCP_PROJECT_ID && format('{0}-docker.pkg.dev/{1}/kube-agents', vars.GCP_REGION || 'us-east4', vars.GCP_PROJECT_ID)) || '' }}
           GITHUB_ORG: ${{ vars.GH_ORG || 'test-org-kube-agent' }}
           GITHUB_REPO: ${{ vars.GH_REPO || 'test-org-kube-agent/agents-repo' }}
+          TEST_ENVIRONMENT: ${{ inputs.test_environment }}
           STOCKOUT_SCENARIOS: ${{ inputs.stockout_scenarios }}
           REBUILD_OPERATOR: ${{ inputs.rebuild_operator }}
           CHAT_TOPIC_NAME: ${{ vars.CHAT_TOPIC_NAME }}
@@ -93,7 +94,7 @@ jobs:
           E2E_CHAT_REFRESH_TOKEN: ${{ secrets.E2E_CHAT_REFRESH_TOKEN }}
           CHAT_SPACE_ID: ${{ secrets.E2E_CHAT_SPACE_ID }}
         run: |
-          TARGET_ENV="${{ inputs.test_environment }}"
+          TARGET_ENV="$TEST_ENVIRONMENT"
           if [ "$TARGET_ENV" = "all" ]; then
             python3 scripts/release/execute_e2e_tests.py
           else
